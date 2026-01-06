@@ -10,6 +10,7 @@ import type { TerminalProcess, WindowGetter } from './types';
 import { IPC_CHANNELS } from '../../shared/constants';
 import { getClaudeProfileManager } from '../claude-profile-manager';
 import { readSettingsFile } from '../settings-utils';
+import { buildMergedPath } from '../path-env';
 import type { SupportedTerminal } from '../../shared/types/settings';
 
 /**
@@ -94,6 +95,7 @@ export function spawnPtyProcess(
     env: {
       ...process.env,
       ...profileEnv,
+      PATH: buildMergedPath(profileEnv?.PATH || process.env.PATH, { includeCodexOverrideDir: true }),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
     },

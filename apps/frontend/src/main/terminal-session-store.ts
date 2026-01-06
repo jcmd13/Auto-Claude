@@ -11,6 +11,7 @@ export interface TerminalSession {
   cwd: string;
   projectPath: string;  // Which project this terminal belongs to
   isClaudeMode: boolean;
+  isCodexMode?: boolean;
   claudeSessionId?: string;  // Claude session ID for resume functionality
   outputBuffer: string;  // Last 100KB of output for replay
   createdAt: string;  // ISO timestamp

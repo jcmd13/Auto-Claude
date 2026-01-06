@@ -25,20 +25,51 @@ export const integrationMock = {
     success: true,
     data: {
       hasClaudeToken: true,
+      autoBuildModel: undefined,
       envExists: true,
       sourcePath: '/mock/auto-claude'
     }
   }),
 
-  updateSourceEnv: async () => ({
+  updateSourceEnv: async (_config: { claudeOAuthToken?: string; autoBuildModel?: string; autoClaudeEngine?: string; codexApprovalPolicy?: string; codexSandboxMode?: string }) => ({
     success: true
   }),
+
+  onSourceEnvUpdated: (_callback: unknown) => () => {},
 
   checkSourceToken: async () => ({
     success: true,
     data: {
       hasToken: true,
       sourcePath: '/mock/auto-claude'
+    }
+  }),
+
+  // Codex
+  checkCodexLoginStatus: async () => ({
+    success: true,
+    data: {
+      success: true,
+      authenticated: true,
+      loginMethod: 'chatgpt' as const
+    }
+  }),
+
+  checkCodexExecpolicyStatus: async () => ({
+    success: true,
+    data: {
+      rulesPath: '/mock/.codex/rules/auto-claude.rules',
+      installed: true,
+      generatedAt: '2025-01-01T00:00:00Z',
+      projectPath: '/mock/project'
+    }
+  }),
+
+  installCodexExecpolicy: async (_projectPath: string) => ({
+    success: true,
+    data: {
+      rulesPath: '/mock/.codex/rules/auto-claude.rules',
+      stdout: '✅ Wrote Codex execpolicy rules: /mock/.codex/rules/auto-claude.rules'
     }
   }),
 

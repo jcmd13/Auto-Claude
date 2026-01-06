@@ -8,6 +8,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragStartEvent,
   type DragEndEvent
 } from '@dnd-kit/core';
 import {
@@ -49,16 +50,19 @@ import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
+import { Toaster } from './components/ui/toaster';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings } from './stores/settings-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
+import { loadSourceEnv, useSourceEnvStore } from './stores/source-env-store';
 import { initializeGitHubListeners } from './stores/github';
 import { initDownloadProgressListener } from './stores/download-store';
 import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
 import { useIpcListeners } from './hooks/useIpc';
 import { COLOR_THEMES, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_DEFAULT } from '../shared/constants';
 import type { Task, Project, ColorTheme } from '../shared/types';
+import { debugLog } from '../shared/utils/debug-logger';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider, useViewState } from './contexts/ViewStateContext';
@@ -118,6 +122,7 @@ export function App() {
   const tasks = useTaskStore((state) => state.tasks);
   const settings = useSettingsStore((state) => state.settings);
   const settingsLoading = useSettingsStore((state) => state.isLoading);
+  const sourceEnv = useSourceEnvStore((state) => state.sourceEnv);
 
   // UI State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -167,6 +172,7 @@ export function App() {
   useEffect(() => {
     loadProjects();
     loadSettings();
+    loadSourceEnv();
     // Initialize global GitHub listeners (PR reviews, etc.) so they persist across navigation
     initializeGitHubListeners();
     // Initialize global download progress listener for Ollama model downloads
@@ -177,9 +183,15 @@ export function App() {
     };
   }, []);
 
+  // Keep app/window title aligned with the selected engine (Claude vs Codex)
+  useEffect(() => {
+    const engine = sourceEnv?.autoClaudeEngine || 'claude';
+    document.title = engine === 'codex' ? 'Auto Codex' : 'Auto Claude';
+  }, [sourceEnv?.autoClaudeEngine]);
+
   // Restore tab state and open tabs for loaded projects
   useEffect(() => {
-    console.log('[App] Tab restore useEffect triggered:', {
+    debugLog('[App] Tab restore useEffect triggered:', {
       projectsCount: projects.length,
       openProjectIds,
       activeProjectId,
@@ -194,34 +206,34 @@ export function App() {
       if (openProjectIds.length === 0) {
         // No tabs persisted at all, open the first available project
         const projectToOpen = activeProjectId || selectedProjectId || projects[0].id;
-        console.log('[App] No tabs persisted, opening project:', projectToOpen);
+        debugLog('[App] No tabs persisted, opening project:', projectToOpen);
         // Verify the project exists before opening
         if (projects.some(p => p.id === projectToOpen)) {
           openProjectTab(projectToOpen);
           setActiveProject(projectToOpen);
         } else {
           // Fallback to first project if stored IDs are invalid
-          console.log('[App] Project not found, falling back to first project:', projects[0].id);
+          debugLog('[App] Project not found, falling back to first project:', projects[0].id);
           openProjectTab(projects[0].id);
           setActiveProject(projects[0].id);
         }
         return;
       }
-      console.log('[App] Tabs already persisted, checking active project');
+      debugLog('[App] Tabs already persisted, checking active project');
       // If there's an active project but no tabs open for it, open a tab
       // Note: Use openProjectIds instead of projectTabs to avoid re-render loop
       // (projectTabs creates a new array on every render)
       if (activeProjectId && !openProjectIds.includes(activeProjectId)) {
-        console.log('[App] Active project has no tab, opening:', activeProjectId);
+        debugLog('[App] Active project has no tab, opening:', activeProjectId);
         openProjectTab(activeProjectId);
       }
       // If there's a selected project but no active project, make it active
       else if (selectedProjectId && !activeProjectId) {
-        console.log('[App] No active project, using selected:', selectedProjectId);
+        debugLog('[App] No active project, using selected:', selectedProjectId);
         setActiveProject(selectedProjectId);
         openProjectTab(selectedProjectId);
       } else {
-        console.log('[App] Tab state is valid, no action needed');
+        debugLog('[App] Tab state is valid, no action needed');
       }
     }
   }, [projects, activeProjectId, selectedProjectId, openProjectIds, openProjectTab, setActiveProject]);
@@ -535,7 +547,7 @@ export function App() {
   };
 
   // Handle drag start - set the active dragged project
-  const handleDragStart = (event: any) => {
+  const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const draggedProject = projectTabs.find(p => p.id === active.id);
     if (draggedProject) {
@@ -562,19 +574,19 @@ export function App() {
     if (!pendingProject) return;
 
     const projectId = pendingProject.id;
-    console.log('[InitDialog] Starting initialization for project:', projectId);
+    debugLog('[InitDialog] Starting initialization for project:', projectId);
     setIsInitializing(true);
     setInitSuccess(false);
     setInitError(null); // Clear any previous errors
     try {
       const result = await initializeProject(projectId);
-      console.log('[InitDialog] Initialization result:', result);
+      debugLog('[InitDialog] Initialization result:', result);
 
       if (result?.success) {
-        console.log('[InitDialog] Initialization successful, closing dialog');
+        debugLog('[InitDialog] Initialization successful, closing dialog');
         // Get the updated project from store
         const updatedProject = useProjectStore.getState().projects.find(p => p.id === projectId);
-        console.log('[InitDialog] Updated project:', updatedProject);
+        debugLog('[InitDialog] Updated project:', updatedProject);
 
         // Mark as successful to prevent onOpenChange from treating this as a skip
         setInitSuccess(true);
@@ -591,7 +603,7 @@ export function App() {
         }
       } else {
         // Initialization failed - show error but keep dialog open
-        console.log('[InitDialog] Initialization failed, showing error');
+        debugLog('[InitDialog] Initialization failed, showing error');
         const errorMessage = result?.error || 'Failed to initialize Auto Claude. Please try again.';
         setInitError(errorMessage);
         setIsInitializing(false);
@@ -649,7 +661,7 @@ export function App() {
   };
 
   const handleSkipInit = () => {
-    console.log('[InitDialog] User skipped initialization');
+    debugLog('[InitDialog] User skipped initialization');
     if (pendingProject) {
       setSkippedInitProjectId(pendingProject.id);
     }
@@ -673,6 +685,7 @@ export function App() {
     <ViewStateProvider>
       <TooltipProvider>
         <ProactiveSwapListener />
+        <Toaster />
       <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
@@ -860,7 +873,7 @@ export function App() {
 
         {/* Initialize Auto Claude Dialog */}
         <Dialog open={showInitDialog} onOpenChange={(open) => {
-          console.log('[InitDialog] onOpenChange called', { open, pendingProject: !!pendingProject, isInitializing, initSuccess });
+          debugLog('[InitDialog] onOpenChange called', { open, pendingProject: !!pendingProject, isInitializing, initSuccess });
           // Only trigger skip if user manually closed the dialog
           // Don't trigger if: successful init, no pending project, or currently initializing
           if (!open && pendingProject && !isInitializing && !initSuccess) {

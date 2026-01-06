@@ -3,7 +3,9 @@ import { unstable_batchedUpdates } from 'react-dom';
 import { useTaskStore } from '../stores/task-store';
 import { useRoadmapStore } from '../stores/roadmap-store';
 import { useRateLimitStore } from '../stores/rate-limit-store';
+import { useSourceEnvStore } from '../stores/source-env-store';
 import type { ImplementationPlan, TaskStatus, RoadmapGenerationStatus, Roadmap, ExecutionProgress, RateLimitInfo, SDKRateLimitInfo } from '../../shared/types';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Batched update queue for IPC events.
@@ -121,6 +123,7 @@ export function useIpcListeners(): void {
   const appendLog = useTaskStore((state) => state.appendLog);
   const batchAppendLogs = useTaskStore((state) => state.batchAppendLogs);
   const setError = useTaskStore((state) => state.setError);
+  const setSourceEnv = useSourceEnvStore((state) => state.setSourceEnv);
 
   // Update module-level store actions reference for batch flushing
   // This ensures flushBatch() always has access to current action implementations
@@ -172,7 +175,7 @@ export function useIpcListeners(): void {
       (projectId: string, status: RoadmapGenerationStatus) => {
         // Debug logging
         if (window.DEBUG) {
-          console.warn('[Roadmap] Progress update:', {
+          debugLog('[Roadmap] Progress update:', {
             projectId,
             currentProjectId: useRoadmapStore.getState().currentProjectId,
             phase: status.phase,
@@ -191,7 +194,7 @@ export function useIpcListeners(): void {
       (projectId: string, roadmap: Roadmap) => {
         // Debug logging
         if (window.DEBUG) {
-          console.warn('[Roadmap] Generation complete:', {
+          debugLog('[Roadmap] Generation complete:', {
             projectId,
             currentProjectId: useRoadmapStore.getState().currentProjectId,
             featuresCount: roadmap.features?.length || 0,
@@ -236,7 +239,7 @@ export function useIpcListeners(): void {
       (projectId: string) => {
         // Debug logging
         if (window.DEBUG) {
-          console.warn('[Roadmap] Generation stopped:', {
+          debugLog('[Roadmap] Generation stopped:', {
             projectId,
             currentProjectId: useRoadmapStore.getState().currentProjectId
           });
@@ -280,6 +283,10 @@ export function useIpcListeners(): void {
       }
     );
 
+    const cleanupSourceEnvUpdated = window.electronAPI.onSourceEnvUpdated((config) => {
+      setSourceEnv(config);
+    });
+
     // Cleanup on unmount
     return () => {
       // Flush any pending batched updates before cleanup
@@ -299,8 +306,9 @@ export function useIpcListeners(): void {
       cleanupRoadmapStopped();
       cleanupRateLimit();
       cleanupSDKRateLimit();
+      cleanupSourceEnvUpdated();
     };
-  }, [updateTaskFromPlan, updateTaskStatus, updateExecutionProgress, appendLog, batchAppendLogs, setError]);
+  }, [updateTaskFromPlan, updateTaskStatus, updateExecutionProgress, appendLog, batchAppendLogs, setError, setSourceEnv]);
 }
 
 /**

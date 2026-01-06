@@ -62,6 +62,7 @@ export const IPC_CHANNELS = {
   TERMINAL_INPUT: 'terminal:input',
   TERMINAL_RESIZE: 'terminal:resize',
   TERMINAL_INVOKE_CLAUDE: 'terminal:invokeClaude',
+  TERMINAL_INVOKE_CODEX: 'terminal:invokeCodex',
   TERMINAL_GENERATE_NAME: 'terminal:generateName',
 
   // Terminal session management
@@ -69,6 +70,7 @@ export const IPC_CHANNELS = {
   TERMINAL_RESTORE_SESSION: 'terminal:restoreSession',
   TERMINAL_CLEAR_SESSIONS: 'terminal:clearSessions',
   TERMINAL_RESUME_CLAUDE: 'terminal:resumeClaude',
+  TERMINAL_RESUME_CODEX: 'terminal:resumeCodex',
   TERMINAL_GET_SESSION_DATES: 'terminal:getSessionDates',
   TERMINAL_GET_SESSIONS_FOR_DATE: 'terminal:getSessionsForDate',
   TERMINAL_RESTORE_FROM_DATE: 'terminal:restoreFromDate',
@@ -122,6 +124,7 @@ export const IPC_CHANNELS = {
   // Shell operations
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
   SHELL_OPEN_TERMINAL: 'shell:openTerminal',
+  SHELL_SHOW_ITEM_IN_FOLDER: 'shell:showItemInFolder',
 
   // Roadmap operations
   ROADMAP_GET: 'roadmap:get',
@@ -152,6 +155,11 @@ export const IPC_CHANNELS = {
   ENV_UPDATE: 'env:update',
   ENV_CHECK_CLAUDE_AUTH: 'env:checkClaudeAuth',
   ENV_INVOKE_CLAUDE_SETUP: 'env:invokeClaudeSetup',
+
+  // Codex CLI authentication
+  CODEX_LOGIN_STATUS: 'codex:loginStatus',
+  CODEX_INSTALL_EXECPOLICY: 'codex:installExecpolicy',
+  CODEX_EXECPOLICY_STATUS: 'codex:execpolicyStatus',
 
   // Ideation operations
   IDEATION_GET: 'ideation:get',
@@ -394,6 +402,7 @@ export const IPC_CHANNELS = {
   AUTOBUILD_SOURCE_ENV_GET: 'autobuild:source:env:get',
   AUTOBUILD_SOURCE_ENV_UPDATE: 'autobuild:source:env:update',
   AUTOBUILD_SOURCE_ENV_CHECK_TOKEN: 'autobuild:source:env:checkToken',
+  AUTOBUILD_SOURCE_ENV_UPDATED: 'autobuild:source:env:updated',
 
   // Changelog operations
   CHANGELOG_GET_DONE_TASKS: 'changelog:getDoneTasks',

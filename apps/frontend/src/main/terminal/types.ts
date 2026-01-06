@@ -8,6 +8,7 @@ export interface TerminalProcess {
   id: string;
   pty: pty.IPty;
   isClaudeMode: boolean;
+  isCodexMode?: boolean;
   projectPath?: string;
   cwd: string;
   claudeSessionId?: string;

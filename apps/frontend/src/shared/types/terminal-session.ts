@@ -24,6 +24,9 @@ export interface TerminalSessionState {
   isClaudeMode: boolean;
   claudeSessionId?: string;  // For potential /resume
 
+  // Codex specific
+  isCodexMode?: boolean;
+
   // Timing
   createdAt: number;
   lastActiveAt: number;
@@ -55,6 +58,7 @@ export interface TerminalRecoveryInfo {
     id: string;
     title: string;
     isClaudeMode: boolean;
+    isCodexMode?: boolean;
     lastActiveAt: number;
     hasBuffer: boolean;
     hasDaemonPty: boolean;

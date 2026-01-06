@@ -24,6 +24,7 @@ export interface TerminalAPI {
   sendTerminalInput: (id: string, data: string) => void;
   resizeTerminal: (id: string, cols: number, rows: number) => void;
   invokeClaudeInTerminal: (id: string, cwd?: string) => void;
+  invokeCodexInTerminal: (id: string, cwd?: string) => void;
   generateTerminalName: (command: string, cwd?: string) => Promise<IPCResult<string>>;
 
   // Terminal Session Management
@@ -35,6 +36,7 @@ export interface TerminalAPI {
   ) => Promise<IPCResult<import('../../shared/types').TerminalRestoreResult>>;
   clearTerminalSessions: (projectPath: string) => Promise<IPCResult>;
   resumeClaudeInTerminal: (id: string, sessionId?: string) => void;
+  resumeCodexInTerminal: (id: string) => void;
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<import('../../shared/types').SessionDateInfo[]>>;
   getTerminalSessionsForDate: (
     date: string,
@@ -97,6 +99,9 @@ export const createTerminalAPI = (): TerminalAPI => ({
   invokeClaudeInTerminal: (id: string, cwd?: string): void =>
     ipcRenderer.send(IPC_CHANNELS.TERMINAL_INVOKE_CLAUDE, id, cwd),
 
+  invokeCodexInTerminal: (id: string, cwd?: string): void =>
+    ipcRenderer.send(IPC_CHANNELS.TERMINAL_INVOKE_CODEX, id, cwd),
+
   generateTerminalName: (command: string, cwd?: string): Promise<IPCResult<string>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_GENERATE_NAME, command, cwd),
 
@@ -116,6 +121,9 @@ export const createTerminalAPI = (): TerminalAPI => ({
 
   resumeClaudeInTerminal: (id: string, sessionId?: string): void =>
     ipcRenderer.send(IPC_CHANNELS.TERMINAL_RESUME_CLAUDE, id, sessionId),
+
+  resumeCodexInTerminal: (id: string): void =>
+    ipcRenderer.send(IPC_CHANNELS.TERMINAL_RESUME_CODEX, id),
 
   getTerminalSessionDates: (projectPath?: string): Promise<IPCResult<import('../../shared/types').SessionDateInfo[]>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_GET_SESSION_DATES, projectPath),

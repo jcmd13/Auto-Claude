@@ -88,7 +88,7 @@ export function setupIpcHandlers(
   registerGitlabHandlers(agentManager, getMainWindow);
 
   // Auto-build source update handlers
-  registerAutobuildSourceHandlers(getMainWindow);
+  registerAutobuildSourceHandlers(pythonEnvManager, getMainWindow);
 
   // Ideation handlers
   registerIdeationHandlers(agentManager, getMainWindow);

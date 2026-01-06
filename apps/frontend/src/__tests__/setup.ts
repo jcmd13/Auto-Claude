@@ -81,6 +81,14 @@ if (typeof window !== 'undefined') {
     onTaskStatusChange: vi.fn(() => vi.fn()),
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
+    // Auto-Claude source env + Codex helpers (used by IntegrationSettings)
+    getSourceEnv: vi.fn().mockResolvedValue({ success: true, data: { hasClaudeToken: false, envExists: false } }),
+    updateSourceEnv: vi.fn().mockResolvedValue({ success: true }),
+    onSourceEnvUpdated: vi.fn(() => vi.fn()),
+    checkCodexLoginStatus: vi.fn().mockResolvedValue({ success: true, data: { success: true, authenticated: true, loginMethod: 'chatgpt' } }),
+    checkCodexExecpolicyStatus: vi.fn().mockResolvedValue({ success: true, data: { rulesPath: '/mock/.codex/rules/auto-claude.rules', installed: true } }),
+    installCodexExecpolicy: vi.fn().mockResolvedValue({ success: true, data: { rulesPath: '/mock/.codex/rules/auto-claude.rules' } }),
+    onTerminalOAuthToken: vi.fn(() => vi.fn()),
     selectDirectory: vi.fn(),
     getAppVersion: vi.fn(),
     // Tab state persistence (IPC-based)

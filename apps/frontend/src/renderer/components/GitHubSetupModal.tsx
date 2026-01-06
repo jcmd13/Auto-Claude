@@ -1,20 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Github,
   GitBranch,
   Key,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  Sparkles,
-  Plus,
+	Loader2,
+	CheckCircle2,
+	ChevronRight,
+	Sparkles,
+	Plus,
   Link,
   Lock,
   Globe,
-  Building,
-  User
+	Building,
+	User
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -28,15 +27,15 @@ import {
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
 } from './ui/select';
 import { GitHubOAuthFlow } from './project-settings/GitHubOAuthFlow';
 import { ClaudeOAuthFlow } from './project-settings/ClaudeOAuthFlow';
-import type { Project, ProjectSettings } from '../../shared/types';
+import type { Project } from '../../shared/types';
 
 interface GitHubSetupModalProps {
   open: boolean;
@@ -88,6 +87,56 @@ export function GitHubSetupModal({
   const [organizations, setOrganizations] = useState<Array<{ login: string; avatarUrl?: string }>>([]);
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+
+  // Load user info and organizations
+  const loadUserAndOrgs = useCallback(async () => {
+    setIsLoadingOrgs(true);
+    try {
+      // Get current user
+      const userResult = await window.electronAPI.getGitHubUser();
+      if (userResult.success && userResult.data) {
+        setGithubUsername(userResult.data.username);
+        setSelectedOwner(userResult.data.username); // Default to personal account
+      }
+
+      // Get organizations
+      const orgsResult = await window.electronAPI.listGitHubOrgs();
+      if (orgsResult.success && orgsResult.data) {
+        setOrganizations(orgsResult.data.orgs);
+      }
+    } catch (err) {
+      console.error('Failed to load user/orgs:', err);
+    } finally {
+      setIsLoadingOrgs(false);
+    }
+  }, []);
+
+  // Detect repository from git remote when auth succeeds
+  const detectRepository = useCallback(async () => {
+    setIsLoadingRepo(true);
+    setError(null);
+
+    try {
+      // Try to detect repo from git remote
+      const result = await window.electronAPI.detectGitHubRepo(project.path);
+      if (result.success && result.data) {
+        setDetectedRepo(result.data);
+        setGithubRepo(result.data);
+        // Go to confirmation step instead of directly to branch
+        setStep('repo-confirm');
+      } else {
+        // No remote detected, load orgs and show repo setup step
+        await loadUserAndOrgs();
+        setStep('repo');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to detect repository');
+      await loadUserAndOrgs();
+      setStep('repo');
+    } finally {
+      setIsLoadingRepo(false);
+    }
+  }, [loadUserAndOrgs, project.path]);
 
   // Reset state and check existing auth when modal opens
   useEffect(() => {
@@ -153,57 +202,7 @@ export function GitHubSetupModal({
 
       checkExistingAuth();
     }
-  }, [open]);
-
-  // Load user info and organizations
-  const loadUserAndOrgs = async () => {
-    setIsLoadingOrgs(true);
-    try {
-      // Get current user
-      const userResult = await window.electronAPI.getGitHubUser();
-      if (userResult.success && userResult.data) {
-        setGithubUsername(userResult.data.username);
-        setSelectedOwner(userResult.data.username); // Default to personal account
-      }
-
-      // Get organizations
-      const orgsResult = await window.electronAPI.listGitHubOrgs();
-      if (orgsResult.success && orgsResult.data) {
-        setOrganizations(orgsResult.data.orgs);
-      }
-    } catch (err) {
-      console.error('Failed to load user/orgs:', err);
-    } finally {
-      setIsLoadingOrgs(false);
-    }
-  };
-
-  // Detect repository from git remote when auth succeeds
-  const detectRepository = async () => {
-    setIsLoadingRepo(true);
-    setError(null);
-
-    try {
-      // Try to detect repo from git remote
-      const result = await window.electronAPI.detectGitHubRepo(project.path);
-      if (result.success && result.data) {
-        setDetectedRepo(result.data);
-        setGithubRepo(result.data);
-        // Go to confirmation step instead of directly to branch
-        setStep('repo-confirm');
-      } else {
-        // No remote detected, load orgs and show repo setup step
-        await loadUserAndOrgs();
-        setStep('repo');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to detect repository');
-      await loadUserAndOrgs();
-      setStep('repo');
-    } finally {
-      setIsLoadingRepo(false);
-    }
-  };
+  }, [detectRepository, open, project.name]);
 
   // Load branches from GitHub
   const loadBranches = async (repo: string) => {

@@ -114,6 +114,7 @@ class SessionPersistence {
         id: s.id,
         title: s.title,
         isClaudeMode: s.isClaudeMode,
+        isCodexMode: s.isCodexMode,
         lastActiveAt: s.lastActiveAt,
         hasBuffer: !!s.bufferFile,
         hasDaemonPty: !!s.daemonPtyId,
@@ -135,7 +136,7 @@ class SessionPersistence {
    */
   updateSessionMetadata(
     id: string,
-    updates: Partial<Pick<TerminalSessionState, 'title' | 'isClaudeMode' | 'claudeSessionId' | 'daemonPtyId'>>
+    updates: Partial<Pick<TerminalSessionState, 'title' | 'isClaudeMode' | 'isCodexMode' | 'claudeSessionId' | 'daemonPtyId'>>
   ): void {
     const session = this.sessions.get(id);
     if (!session) return;

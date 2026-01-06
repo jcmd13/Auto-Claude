@@ -21,6 +21,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { useRateLimitStore } from '../stores/rate-limit-store';
 import { useClaudeProfileStore, loadClaudeProfiles } from '../stores/claude-profile-store';
+import { toast } from '../hooks/use-toast';
 import type { SDKRateLimitInfo } from '../../shared/types';
 
 const CLAUDE_UPGRADE_URL = 'https://claude.ai/upgrade';
@@ -160,22 +161,32 @@ export function SDKRateLimitModal() {
           // Close the modal so user can see the terminal
           hideSDKRateLimitModal();
 
-          // Alert the user about the terminal
-          alert(
-            `A terminal has been opened to authenticate "${profileName}".\n\n` +
-            `Steps to complete:\n` +
-            `1. Check the "Agent Terminals" section in the sidebar\n` +
-            `2. Complete the OAuth login in your browser\n` +
-            `3. The token will be saved automatically\n\n` +
-            `Once done, return here and the account will be available.`
-          );
+          toast({
+            title: `Authenticating "${profileName}"`,
+            description:
+              'A terminal has been opened for authentication.\n\n' +
+              'Steps:\n' +
+              '1. Open "Agent Terminals" in the sidebar\n' +
+              '2. Complete the OAuth login in your browser\n' +
+              '3. The token will be saved automatically\n\n' +
+              'Once done, return here and the account will be available.',
+            duration: 15000,
+          });
         } else {
-          alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
+          toast({
+            variant: 'destructive',
+            title: 'Failed to start authentication',
+            description: initResult.error || 'Please try again.',
+          });
         }
       }
     } catch (err) {
       console.error('Failed to add profile:', err);
-      alert('Failed to add profile. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to add profile',
+        description: 'Please try again.',
+      });
     } finally {
       setIsAddingProfile(false);
     }

@@ -5,7 +5,7 @@
 
 const isDebugEnabled = (): boolean => {
   if (typeof process !== 'undefined' && process.env) {
-    return process.env.DEBUG === 'true';
+    return ['true', '1', 'yes', 'on'].includes((process.env.DEBUG || '').toLowerCase());
   }
   return false;
 };

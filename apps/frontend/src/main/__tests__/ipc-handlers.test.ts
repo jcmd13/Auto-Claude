@@ -211,6 +211,10 @@ describe('IPC Handlers', () => {
   });
 
   afterEach(() => {
+    // Reset IPC listeners/handlers between tests to avoid accumulating
+    // multiple ipcMain.on(...) registrations (and triggering MaxListeners warnings).
+    ipcMain?.removeAllListeners();
+    ipcMain?.handlers?.clear();
     cleanupTestDirs();
     vi.clearAllMocks();
   });

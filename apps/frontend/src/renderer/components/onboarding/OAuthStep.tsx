@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Key,
   Eye,
   EyeOff,
   Info,
@@ -26,6 +25,7 @@ import { Label } from '../ui/label';
 import { Card, CardContent } from '../ui/card';
 import { cn } from '../../lib/utils';
 import { loadClaudeProfiles as loadGlobalClaudeProfiles } from '../../stores/claude-profile-store';
+import { toast } from '../../hooks/use-toast';
 import type { ClaudeProfile } from '../../../shared/types';
 
 interface OAuthStepProps {
@@ -98,8 +98,14 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
       if (info.success && info.profileId) {
         // Reload profiles to show updated state
         await loadClaudeProfiles();
-        // Show simple success notification
-        alert(`✅ Profile authenticated successfully!\n\n${info.email ? `Account: ${info.email}` : 'Authentication complete.'}\n\nYou can now use this profile.`);
+        toast({
+          variant: 'success',
+          title: 'Profile authenticated',
+          description: info.email
+            ? `Account: ${info.email}\n\nYou can now use this profile.`
+            : 'Authentication complete.\n\nYou can now use this profile.',
+          duration: 8000,
+        });
       }
     });
 
@@ -144,19 +150,29 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
           await loadClaudeProfiles();
           setNewProfileName('');
 
-          alert(
-            `Authenticating "${profileName}"...\n\n` +
-            `A browser window will open for you to log in with your Claude account.\n\n` +
-            `The authentication will be saved automatically once complete.`
-          );
+          toast({
+            title: `Authenticating "${profileName}"...`,
+            description:
+              'A browser window will open for you to log in with your Claude account.\n\n' +
+              'The authentication will be saved automatically once complete.',
+            duration: 12000,
+          });
         } else {
           await loadClaudeProfiles();
-          alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
+          toast({
+            variant: 'destructive',
+            title: 'Failed to start authentication',
+            description: initResult.error || 'Please try again.',
+          });
         }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add profile');
-      alert('Failed to add profile. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to add profile',
+        description: 'Please try again.',
+      });
     } finally {
       setIsAddingProfile(false);
     }
@@ -223,17 +239,27 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
     try {
       const initResult = await window.electronAPI.initializeClaudeProfile(profileId);
       if (initResult.success) {
-        alert(
-          `Authenticating profile...\n\n` +
-          `A browser window will open for you to log in with your Claude account.\n\n` +
-          `The authentication will be saved automatically once complete.`
-        );
+        toast({
+          title: 'Authenticating profile...',
+          description:
+            'A browser window will open for you to log in with your Claude account.\n\n' +
+            'The authentication will be saved automatically once complete.',
+          duration: 12000,
+        });
       } else {
-        alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to start authentication',
+          description: initResult.error || 'Please try again.',
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to authenticate profile');
-      alert('Failed to start authentication. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to start authentication',
+        description: 'Please try again.',
+      });
     } finally {
       setAuthenticatingProfileId(null);
     }
@@ -271,11 +297,19 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
         setManualTokenEmail('');
         setShowManualToken(false);
       } else {
-        alert(`Failed to save token: ${result.error || 'Please try again.'}`);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to save token',
+          description: result.error || 'Please try again.',
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save token');
-      alert('Failed to save token. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to save token',
+        description: 'Please try again.',
+      });
     } finally {
       setSavingTokenProfileId(null);
     }

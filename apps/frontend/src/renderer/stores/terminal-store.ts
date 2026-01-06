@@ -13,6 +13,7 @@ export interface Terminal {
   cwd: string;
   createdAt: Date;
   isClaudeMode: boolean;
+  isCodexMode: boolean;
   claudeSessionId?: string;  // Claude Code session ID for resume
   // outputBuffer removed - now managed by terminalBufferManager singleton
   isRestored?: boolean;  // Whether this terminal was restored from a saved session
@@ -43,6 +44,7 @@ interface TerminalState {
   setActiveTerminal: (id: string | null) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   setClaudeMode: (id: string, isClaudeMode: boolean) => void;
+  setCodexMode: (id: string, isCodexMode: boolean) => void;
   setClaudeSessionId: (id: string, sessionId: string) => void;
   setAssociatedTask: (id: string, taskId: string | undefined) => void;
   clearAllTerminals: () => void;
@@ -75,6 +77,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       cwd: cwd || process.env.HOME || '~',
       createdAt: new Date(),
       isClaudeMode: false,
+      isCodexMode: false,
       // outputBuffer removed - managed by terminalBufferManager
       projectPath,
     };
@@ -103,6 +106,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       cwd: session.cwd,
       createdAt: new Date(session.createdAt),
       isClaudeMode: session.isClaudeMode,
+      isCodexMode: session.isCodexMode ?? false,
       claudeSessionId: session.claudeSessionId,
       // outputBuffer now stored in terminalBufferManager
       isRestored: true,
@@ -163,7 +167,27 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set((state) => ({
       terminals: state.terminals.map((t) =>
         t.id === id
-          ? { ...t, isClaudeMode, status: isClaudeMode ? 'claude-active' : 'running' }
+          ? {
+            ...t,
+            isClaudeMode,
+            isCodexMode: false,
+            status: isClaudeMode ? 'claude-active' : 'running'
+          }
+          : t
+      ),
+    }));
+  },
+
+  setCodexMode: (id: string, isCodexMode: boolean) => {
+    set((state) => ({
+      terminals: state.terminals.map((t) =>
+        t.id === id
+          ? {
+            ...t,
+            isCodexMode,
+            isClaudeMode: false,
+            status: isCodexMode ? 'claude-active' : 'running'
+          }
           : t
       ),
     }));

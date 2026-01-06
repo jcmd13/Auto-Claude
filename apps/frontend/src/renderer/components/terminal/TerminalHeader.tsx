@@ -12,10 +12,12 @@ interface TerminalHeaderProps {
   title: string;
   status: TerminalStatus;
   isClaudeMode: boolean;
+  isCodexMode: boolean;
   tasks: Task[];
   associatedTask?: Task;
   onClose: () => void;
   onInvokeClaude: () => void;
+  onInvokeCodex: () => void;
   onTitleChange: (newTitle: string) => void;
   onTaskSelect: (taskId: string) => void;
   onClearTask: () => void;
@@ -28,10 +30,12 @@ export function TerminalHeader({
   title,
   status,
   isClaudeMode,
+  isCodexMode,
   tasks,
   associatedTask,
   onClose,
   onInvokeClaude,
+  onInvokeCodex,
   onTitleChange,
   onTaskSelect,
   onClearTask,
@@ -39,6 +43,8 @@ export function TerminalHeader({
   terminalCount = 1,
 }: TerminalHeaderProps) {
   const backlogTasks = tasks.filter((t) => t.status === 'backlog');
+  const isAgentMode = isClaudeMode || isCodexMode;
+  const agentLabel = isCodexMode ? 'Codex' : (isClaudeMode ? 'Claude' : null);
 
   return (
     <div className="electron-no-drag flex h-9 items-center justify-between border-b border-border/50 bg-card/30 px-2">
@@ -53,13 +59,13 @@ export function TerminalHeader({
             terminalCount={terminalCount}
           />
         </div>
-        {isClaudeMode && (
+        {isAgentMode && agentLabel && (
           <span className="flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
             <Sparkles className="h-2.5 w-2.5" />
-            Claude
+            {agentLabel}
           </span>
         )}
-        {isClaudeMode && (
+        {isAgentMode && (
           <TaskSelector
             terminalId={terminalId}
             backlogTasks={backlogTasks}
@@ -71,19 +77,33 @@ export function TerminalHeader({
         )}
       </div>
       <div className="flex items-center gap-1">
-        {!isClaudeMode && status !== 'exited' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs gap-1 hover:bg-primary/10 hover:text-primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              onInvokeClaude();
-            }}
-          >
-            <Sparkles className="h-3 w-3" />
-            Claude
-          </Button>
+        {!isAgentMode && status !== 'exited' && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs gap-1 hover:bg-primary/10 hover:text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onInvokeClaude();
+              }}
+            >
+              <Sparkles className="h-3 w-3" />
+              Claude
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs gap-1 hover:bg-primary/10 hover:text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onInvokeCodex();
+              }}
+            >
+              <Sparkles className="h-3 w-3" />
+              Codex
+            </Button>
+          </>
         )}
         <Button
           variant="ghost"

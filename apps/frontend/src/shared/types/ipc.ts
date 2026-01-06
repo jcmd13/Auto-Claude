@@ -57,6 +57,9 @@ import type {
   ClaudeProfile,
   ClaudeAutoSwitchSettings,
   ClaudeAuthResult,
+  CodexAuthResult,
+  CodexExecpolicyInstallResult,
+  CodexExecpolicyStatusResult,
   ClaudeUsageSnapshot
 } from './agent';
 import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AutoBuildSourceUpdateCheck, AutoBuildSourceUpdateProgress } from './settings';
@@ -106,6 +109,7 @@ import type {
   LinearSyncStatus,
   GitHubRepository,
   GitHubIssue,
+  GitHubIssueComment,
   GitHubSyncStatus,
   GitHubImportResult,
   GitHubInvestigationResult,
@@ -186,6 +190,7 @@ export interface ElectronAPI {
   sendTerminalInput: (id: string, data: string) => void;
   resizeTerminal: (id: string, cols: number, rows: number) => void;
   invokeClaudeInTerminal: (id: string, cwd?: string) => void;
+  invokeCodexInTerminal: (id: string, cwd?: string) => void;
   generateTerminalName: (command: string, cwd?: string) => Promise<IPCResult<string>>;
 
   // Terminal session management (persistence/restore)
@@ -193,6 +198,7 @@ export interface ElectronAPI {
   restoreTerminalSession: (session: TerminalSession, cols?: number, rows?: number) => Promise<IPCResult<TerminalRestoreResult>>;
   clearTerminalSessions: (projectPath: string) => Promise<IPCResult>;
   resumeClaudeInTerminal: (id: string, sessionId?: string) => void;
+  resumeCodexInTerminal: (id: string) => void;
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<SessionDateInfo[]>>;
   getTerminalSessionsForDate: (date: string, projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
   restoreTerminalSessionsFromDate: (date: string, projectPath: string, cols?: number, rows?: number) => Promise<IPCResult<SessionDateRestoreResult>>;
@@ -342,7 +348,7 @@ export interface ElectronAPI {
   getGitHubIssue: (projectId: string, issueNumber: number) => Promise<IPCResult<GitHubIssue>>;
   checkGitHubConnection: (projectId: string) => Promise<IPCResult<GitHubSyncStatus>>;
   investigateGitHubIssue: (projectId: string, issueNumber: number, selectedCommentIds?: number[]) => void;
-  getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<Array<{ id: number; body: string; user: { login: string; avatar_url?: string }; created_at: string; updated_at: string }>>>;
+  getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<GitHubIssueComment[]>>;
   importGitHubIssues: (projectId: string, issueNumbers: number[]) => Promise<IPCResult<GitHubImportResult>>;
   createGitHubRelease: (
     projectId: string,
@@ -571,11 +577,16 @@ export interface ElectronAPI {
   // Shell operations
   openExternal: (url: string) => Promise<void>;
   openTerminal: (dirPath: string) => Promise<IPCResult<void>>;
+  showItemInFolder: (path: string) => Promise<boolean>;
 
   // Auto Claude source environment operations
   getSourceEnv: () => Promise<IPCResult<SourceEnvConfig>>;
-  updateSourceEnv: (config: { claudeOAuthToken?: string }) => Promise<IPCResult>;
+  updateSourceEnv: (config: { claudeOAuthToken?: string; autoBuildModel?: string; autoClaudeEngine?: string; codexApprovalPolicy?: string; codexSandboxMode?: string }) => Promise<IPCResult>;
+  onSourceEnvUpdated: (callback: (config: SourceEnvConfig) => void) => () => void;
   checkSourceToken: () => Promise<IPCResult<SourceEnvCheckResult>>;
+  checkCodexLoginStatus: () => Promise<IPCResult<CodexAuthResult>>;
+  installCodexExecpolicy: (projectPath: string) => Promise<IPCResult<CodexExecpolicyInstallResult>>;
+  checkCodexExecpolicyStatus: () => Promise<IPCResult<CodexExecpolicyStatusResult>>;
 
   // Changelog operations
   getChangelogDoneTasks: (projectId: string, tasks?: Task[]) => Promise<IPCResult<ChangelogTask[]>>;

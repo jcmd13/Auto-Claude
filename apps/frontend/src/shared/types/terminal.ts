@@ -25,6 +25,7 @@ export interface TerminalSession {
   cwd: string;
   projectPath: string;
   isClaudeMode: boolean;
+  isCodexMode?: boolean;
   claudeSessionId?: string;  // Claude Code session ID for --resume
   outputBuffer: string;
   createdAt: string;

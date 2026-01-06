@@ -52,6 +52,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
   const setActiveTerminal = useTerminalStore((state) => state.setActiveTerminal);
   const canAddTerminal = useTerminalStore((state) => state.canAddTerminal);
   const setClaudeMode = useTerminalStore((state) => state.setClaudeMode);
+  const setCodexMode = useTerminalStore((state) => state.setCodexMode);
 
   // Get tasks from task store for task selection dropdown in terminals
   const tasks = useTaskStore((state) => state.tasks);
@@ -207,12 +208,21 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
 
   const handleInvokeClaudeAll = useCallback(() => {
     terminals.forEach((terminal) => {
-      if (terminal.status === 'running' && !terminal.isClaudeMode) {
+      if (terminal.status === 'running' && !terminal.isClaudeMode && !terminal.isCodexMode) {
         setClaudeMode(terminal.id, true);
         window.electronAPI.invokeClaudeInTerminal(terminal.id, projectPath);
       }
     });
   }, [terminals, setClaudeMode, projectPath]);
+
+  const handleInvokeCodexAll = useCallback(() => {
+    terminals.forEach((terminal) => {
+      if (terminal.status === 'running' && !terminal.isClaudeMode && !terminal.isCodexMode) {
+        setCodexMode(terminal.id, true);
+        window.electronAPI.invokeCodexInTerminal(terminal.id, projectPath);
+      }
+    });
+  }, [terminals, setCodexMode, projectPath]);
 
   // Handle drag start - store dragged item data
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -357,7 +367,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {terminals.some((t) => t.status === 'running' && !t.isClaudeMode) && (
+            {terminals.some((t) => t.status === 'running' && !t.isClaudeMode && !t.isCodexMode) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -366,6 +376,17 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
               >
                 <Sparkles className="h-3 w-3" />
                 Invoke Claude All
+              </Button>
+            )}
+            {terminals.some((t) => t.status === 'running' && !t.isClaudeMode && !t.isCodexMode) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={handleInvokeCodexAll}
+              >
+                <Sparkles className="h-3 w-3" />
+                Invoke Codex All
               </Button>
             )}
             <Button

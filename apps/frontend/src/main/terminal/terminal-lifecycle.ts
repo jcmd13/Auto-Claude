@@ -68,6 +68,7 @@ export async function createTerminal(
       id,
       pty: ptyProcess,
       isClaudeMode: false,
+      isCodexMode: false,
       projectPath,
       cwd: terminalCwd,
       outputBuffer: '',
@@ -142,8 +143,23 @@ export async function restoreTerminal(
   if (session.isClaudeMode) {
     terminal.isClaudeMode = true;
     terminal.claudeSessionId = session.claudeSessionId;
+    terminal.isCodexMode = false;
 
     debugLog('[TerminalLifecycle] Restored Claude mode state for session:', session.id, 'sessionId:', session.claudeSessionId);
+
+    const win = getWindow();
+    if (win) {
+      win.webContents.send(IPC_CHANNELS.TERMINAL_TITLE_CHANGE, session.id, session.title);
+    }
+  }
+
+  // Restore Codex mode state (no session ID capture required in MVP)
+  if (session.isCodexMode) {
+    terminal.isCodexMode = true;
+    terminal.isClaudeMode = false;
+    terminal.claudeSessionId = undefined;
+
+    debugLog('[TerminalLifecycle] Restored Codex mode state for session:', session.id);
 
     const win = getWindow();
     if (win) {

@@ -24,6 +24,7 @@ import type {
   AppUpdateProgress,
   NotificationSettings
 } from '../../../shared/types';
+import { debugLog } from '../../../shared/utils/debug-logger';
 
 /**
  * Simple markdown renderer for release notes
@@ -179,11 +180,11 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
   };
 
   const checkForSourceUpdates = async () => {
-    console.log('[AdvancedSettings] Checking for source updates...');
+    debugLog('[AdvancedSettings] Checking for source updates...');
     setIsCheckingSourceUpdate(true);
     try {
       const result = await window.electronAPI.checkAutoBuildSourceUpdate();
-      console.log('[AdvancedSettings] Check result:', result);
+      debugLog('[AdvancedSettings] Check result:', result);
       if (result.success && result.data) {
         setSourceUpdateCheck(result.data);
         // Update displayed version from the check result (most accurate)

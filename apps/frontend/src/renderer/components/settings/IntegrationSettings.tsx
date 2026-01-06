@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Key,
@@ -6,6 +6,7 @@ import {
   EyeOff,
   Info,
   Users,
+  Bot,
   Plus,
   Trash2,
   Star,
@@ -18,7 +19,10 @@ import {
   ChevronRight,
   RefreshCw,
   Activity,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  FolderOpen,
+  Shield
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -27,7 +31,10 @@ import { Switch } from '../ui/switch';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from './SettingsSection';
 import { loadClaudeProfiles as loadGlobalClaudeProfiles } from '../../stores/claude-profile-store';
-import type { AppSettings, ClaudeProfile, ClaudeAutoSwitchSettings } from '../../../shared/types';
+import { useTerminalStore } from '../../stores/terminal-store';
+import { useProjectStore } from '../../stores/project-store';
+import { toast } from '../../hooks/use-toast';
+import type { AppSettings, ClaudeProfile, ClaudeAutoSwitchSettings, AutoClaudeEngineName, CodexAuthResult, SourceEnvConfig, CodexApprovalPolicy, CodexSandboxMode, CodexExecpolicyStatusResult } from '../../../shared/types';
 
 interface IntegrationSettingsProps {
   settings: AppSettings;
@@ -43,6 +50,34 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
   const { t: tCommon } = useTranslation('common');
   // Password visibility toggle for global API keys
   const [showGlobalOpenAIKey, setShowGlobalOpenAIKey] = useState(false);
+
+  const selectedProjectPath = useProjectStore((state) => {
+    const project = state.projects.find((p) => p.id === state.selectedProjectId);
+    return project?.path;
+  });
+
+  const addTerminal = useTerminalStore((state) => state.addTerminal);
+  const updateTerminal = useTerminalStore((state) => state.updateTerminal);
+
+  // Auto-Claude source environment state
+  const [sourceEnv, setSourceEnv] = useState<SourceEnvConfig | null>(null);
+  const [isLoadingSourceEnv, setIsLoadingSourceEnv] = useState(false);
+  const [isUpdatingSourceEnv, setIsUpdatingSourceEnv] = useState(false);
+  const [sourceEnvError, setSourceEnvError] = useState<string | null>(null);
+  const [codexApprovalPolicy, setCodexApprovalPolicy] = useState<string>('');
+  const [codexSandboxMode, setCodexSandboxMode] = useState<string>('');
+  const [autoBuildModel, setAutoBuildModel] = useState<string>('');
+
+  // Codex login status (ChatGPT auth)
+  const [codexStatus, setCodexStatus] = useState<CodexAuthResult | null>(null);
+  const [isCheckingCodexStatus, setIsCheckingCodexStatus] = useState(false);
+  const [isStartingCodexLogin, setIsStartingCodexLogin] = useState(false);
+  const [isPollingCodexStatus, setIsPollingCodexStatus] = useState(false);
+  const codexPollAttemptsRef = useRef(0);
+  const [isInstallingCodexExecpolicy, setIsInstallingCodexExecpolicy] = useState(false);
+  const [codexExecpolicyError, setCodexExecpolicyError] = useState<string | null>(null);
+  const [codexExecpolicyStatus, setCodexExecpolicyStatus] = useState<CodexExecpolicyStatusResult | null>(null);
+  const [isCheckingCodexExecpolicy, setIsCheckingCodexExecpolicy] = useState(false);
 
   // Claude Accounts state
   const [claudeProfiles, setClaudeProfiles] = useState<ClaudeProfile[]>([]);
@@ -69,6 +104,9 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
     if (isOpen) {
       loadClaudeProfiles();
       loadAutoSwitchSettings();
+      loadSourceEnv();
+      loadCodexLoginStatus();
+      loadCodexExecpolicyStatus();
     }
   }, [isOpen]);
 
@@ -78,8 +116,14 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
       if (info.success && info.profileId) {
         // Reload profiles to show updated state
         await loadClaudeProfiles();
-        // Show simple success notification
-        alert(`✅ Profile authenticated successfully!\n\n${info.email ? `Account: ${info.email}` : 'Authentication complete.'}\n\nYou can now use this profile.`);
+        toast({
+          variant: 'success',
+          title: 'Profile authenticated',
+          description: info.email
+            ? `Account: ${info.email}\n\nYou can now use this profile.`
+            : 'Authentication complete.\n\nYou can now use this profile.',
+          duration: 8000,
+        });
       }
     });
 
@@ -102,6 +146,294 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
       setIsLoadingProfiles(false);
     }
   };
+
+  const loadSourceEnv = async () => {
+    setIsLoadingSourceEnv(true);
+    setSourceEnvError(null);
+    try {
+      const result = await window.electronAPI.getSourceEnv();
+      if (result.success && result.data) {
+        setSourceEnv(result.data);
+        setCodexApprovalPolicy(result.data.codexApprovalPolicy || '');
+        setCodexSandboxMode(result.data.codexSandboxMode || '');
+        setAutoBuildModel(result.data.autoBuildModel || '');
+      } else {
+        setSourceEnv(null);
+        setSourceEnvError(result.error || 'Failed to load Auto-Claude source environment');
+      }
+    } catch (err) {
+      setSourceEnv(null);
+      setSourceEnvError(err instanceof Error ? err.message : 'Failed to load Auto-Claude source environment');
+    } finally {
+      setIsLoadingSourceEnv(false);
+    }
+  };
+
+  const handleAutoClaudeEngineChange = async (engine: AutoClaudeEngineName) => {
+    setIsUpdatingSourceEnv(true);
+    setSourceEnvError(null);
+    try {
+      const result = await window.electronAPI.updateSourceEnv({ autoClaudeEngine: engine });
+      if (result.success) {
+        await loadSourceEnv();
+      } else {
+        setSourceEnvError(result.error || 'Failed to update engine selection');
+      }
+    } catch (err) {
+      setSourceEnvError(err instanceof Error ? err.message : 'Failed to update engine selection');
+    } finally {
+      setIsUpdatingSourceEnv(false);
+    }
+  };
+
+  const handleAutoBuildModelSave = async () => {
+    setIsUpdatingSourceEnv(true);
+    setSourceEnvError(null);
+    try {
+      const result = await window.electronAPI.updateSourceEnv({ autoBuildModel });
+      if (result.success) {
+        toast({
+          variant: 'success',
+          title: 'Model saved',
+          description: autoBuildModel ? `AUTO_BUILD_MODEL=${autoBuildModel}` : 'AUTO_BUILD_MODEL cleared',
+        });
+        await loadSourceEnv();
+      } else {
+        setSourceEnvError(result.error || 'Failed to update AUTO_BUILD_MODEL');
+      }
+    } catch (err) {
+      setSourceEnvError(err instanceof Error ? err.message : 'Failed to update AUTO_BUILD_MODEL');
+    } finally {
+      setIsUpdatingSourceEnv(false);
+    }
+  };
+
+  const handleCodexApprovalPolicyChange = async (value: string) => {
+    setCodexApprovalPolicy(value);
+    setIsUpdatingSourceEnv(true);
+    setSourceEnvError(null);
+    try {
+      const result = await window.electronAPI.updateSourceEnv({ codexApprovalPolicy: value });
+      if (!result.success) {
+        setSourceEnvError(result.error || 'Failed to update Codex approval policy');
+      }
+      await loadSourceEnv();
+    } catch (err) {
+      setSourceEnvError(err instanceof Error ? err.message : 'Failed to update Codex approval policy');
+    } finally {
+      setIsUpdatingSourceEnv(false);
+    }
+  };
+
+  const handleCodexSandboxModeChange = async (value: string) => {
+    setCodexSandboxMode(value);
+    setIsUpdatingSourceEnv(true);
+    setSourceEnvError(null);
+    try {
+      const result = await window.electronAPI.updateSourceEnv({ codexSandboxMode: value });
+      if (!result.success) {
+        setSourceEnvError(result.error || 'Failed to update Codex sandbox mode');
+      }
+      await loadSourceEnv();
+    } catch (err) {
+      setSourceEnvError(err instanceof Error ? err.message : 'Failed to update Codex sandbox mode');
+    } finally {
+      setIsUpdatingSourceEnv(false);
+    }
+  };
+
+  const loadCodexLoginStatus = async () => {
+    setIsCheckingCodexStatus(true);
+    try {
+      const result = await window.electronAPI.checkCodexLoginStatus();
+      if (result.success && result.data) {
+        setCodexStatus(result.data);
+        if (result.data.authenticated) {
+          setIsPollingCodexStatus(false);
+        }
+      } else {
+        setCodexStatus({
+          success: false,
+          authenticated: false,
+          error: result.error || 'Failed to check Codex login status'
+        });
+      }
+    } catch (err) {
+      setCodexStatus({
+        success: false,
+        authenticated: false,
+        error: err instanceof Error ? err.message : 'Failed to check Codex login status'
+      });
+    } finally {
+      setIsCheckingCodexStatus(false);
+    }
+  };
+
+  const loadCodexExecpolicyStatus = async () => {
+    setIsCheckingCodexExecpolicy(true);
+    try {
+      const result = await window.electronAPI.checkCodexExecpolicyStatus();
+      if (result.success && result.data) {
+        setCodexExecpolicyStatus(result.data);
+      } else {
+        setCodexExecpolicyStatus(null);
+      }
+    } finally {
+      setIsCheckingCodexExecpolicy(false);
+    }
+  };
+
+  const waitForTerminalRunning = async (terminalId: string, timeoutMs = 8000): Promise<boolean> => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const terminal = useTerminalStore.getState().terminals.find((t) => t.id === terminalId);
+      if (terminal && (terminal.status === 'running' || terminal.status === 'claude-active')) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+  };
+
+  const handleCodexLogin = async () => {
+    setIsStartingCodexLogin(true);
+    try {
+      const terminal = addTerminal(selectedProjectPath);
+      if (!terminal) {
+        toast({
+          variant: 'warning',
+          title: 'Maximum terminals reached',
+          description: 'Close a terminal and try again.',
+        });
+        return;
+      }
+
+      updateTerminal(terminal.id, { title: 'Codex Login' });
+
+      const ready = await waitForTerminalRunning(terminal.id);
+      if (!ready) {
+        toast({
+          variant: 'destructive',
+          title: 'Terminal failed to start',
+          description: 'Try again.',
+        });
+        return;
+      }
+
+      window.electronAPI.sendTerminalInput(terminal.id, 'codex login\r');
+
+      codexPollAttemptsRef.current = 0;
+      setIsPollingCodexStatus(true);
+
+      toast({
+        title: 'Codex login started',
+        description:
+          'Started Codex login in a new Agent Terminal.\n\n' +
+          'Complete the "Sign in with ChatGPT" flow in your browser, then return here — the status will update automatically.',
+        duration: 12000,
+      });
+    } finally {
+      setIsStartingCodexLogin(false);
+    }
+  };
+
+  const handleInstallCodexExecpolicy = async () => {
+    if (!selectedProjectPath) {
+      toast({
+        variant: 'warning',
+        title: 'Select a project first',
+        description: 'Use the top-left project picker to install Codex execpolicy rules.',
+      });
+      return;
+    }
+
+    setIsInstallingCodexExecpolicy(true);
+    setCodexExecpolicyError(null);
+
+    try {
+      const result = await window.electronAPI.installCodexExecpolicy(selectedProjectPath);
+      if (result.success && result.data) {
+        const rulesPath = result.data.rulesPath;
+        toast({
+          variant: 'success',
+          title: 'Codex execpolicy installed',
+          description: rulesPath
+            ? `Rules file:\n${rulesPath}`
+            : 'Rules file path was not detected; see logs for details.',
+          duration: 8000,
+        });
+        await loadCodexExecpolicyStatus();
+      } else {
+        setCodexExecpolicyError(result.error || 'Failed to install Codex execpolicy rules');
+      }
+    } catch (err) {
+      setCodexExecpolicyError(err instanceof Error ? err.message : 'Failed to install Codex execpolicy rules');
+    } finally {
+      setIsInstallingCodexExecpolicy(false);
+    }
+  };
+
+  const handleCopyCodexExecpolicyPath = async () => {
+    const rulesPath = codexExecpolicyStatus?.rulesPath;
+    if (!rulesPath) return;
+
+    try {
+      await navigator.clipboard.writeText(rulesPath);
+      toast({
+        variant: 'success',
+        title: 'Copied rules path',
+        description: rulesPath,
+        duration: 4000,
+      });
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to copy',
+        description: err instanceof Error ? err.message : 'Could not copy rules path to clipboard.',
+      });
+    }
+  };
+
+  const handleRevealCodexExecpolicyRules = async () => {
+    const rulesPath = codexExecpolicyStatus?.rulesPath;
+    if (!rulesPath || !codexExecpolicyStatus?.installed) return;
+
+    try {
+      const opened = await window.electronAPI.showItemInFolder(rulesPath);
+      if (!opened) {
+        toast({
+          variant: 'warning',
+          title: 'Could not reveal rules file',
+          description: rulesPath,
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Could not reveal rules file',
+        description: err instanceof Error ? err.message : 'Failed to open your file browser.',
+      });
+    }
+  };
+
+  // Poll Codex auth while login is in progress
+  useEffect(() => {
+    if (!isPollingCodexStatus || !isOpen) return;
+
+    const interval = setInterval(async () => {
+      codexPollAttemptsRef.current += 1;
+
+      // Stop polling after ~2 minutes
+      if (codexPollAttemptsRef.current > 60) {
+        setIsPollingCodexStatus(false);
+        return;
+      }
+
+      await loadCodexLoginStatus();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isPollingCodexStatus, isOpen]);
 
   const handleAddProfile = async () => {
     if (!newProfileName.trim()) return;
@@ -127,19 +459,29 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
           await loadClaudeProfiles();
           setNewProfileName('');
 
-          alert(
-            `Authenticating "${profileName}"...\n\n` +
-            `A browser window will open for you to log in with your Claude account.\n\n` +
-            `The authentication will be saved automatically once complete.`
-          );
+          toast({
+            title: `Authenticating "${profileName}"...`,
+            description:
+              'A browser window will open for you to log in with your Claude account.\n\n' +
+              'The authentication will be saved automatically once complete.',
+            duration: 12000,
+          });
         } else {
           await loadClaudeProfiles();
-          alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
+          toast({
+            variant: 'destructive',
+            title: 'Failed to start authentication',
+            description: initResult.error || 'Please try again.',
+          });
         }
       }
     } catch (err) {
       console.error('Failed to add profile:', err);
-      alert('Failed to add profile. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to add profile',
+        description: 'Please try again.',
+      });
     } finally {
       setIsAddingProfile(false);
     }
@@ -202,17 +544,27 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
     try {
       const initResult = await window.electronAPI.initializeClaudeProfile(profileId);
       if (initResult.success) {
-        alert(
-          `Authenticating profile...\n\n` +
-          `A browser window will open for you to log in with your Claude account.\n\n` +
-          `The authentication will be saved automatically once complete.`
-        );
+        toast({
+          title: 'Authenticating profile...',
+          description:
+            'A browser window will open for you to log in with your Claude account.\n\n' +
+            'The authentication will be saved automatically once complete.',
+          duration: 12000,
+        });
       } else {
-        alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to start authentication',
+          description: initResult.error || 'Please try again.',
+        });
       }
     } catch (err) {
       console.error('Failed to authenticate profile:', err);
-      alert('Failed to start authentication. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to start authentication',
+        description: 'Please try again.',
+      });
     } finally {
       setAuthenticatingProfileId(null);
     }
@@ -249,11 +601,19 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         setManualTokenEmail('');
         setShowManualToken(false);
       } else {
-        alert(`Failed to save token: ${result.error || 'Please try again.'}`);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to save token',
+          description: result.error || 'Please try again.',
+        });
       }
     } catch (err) {
       console.error('Failed to save token:', err);
-      alert('Failed to save token. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to save token',
+        description: 'Please try again.',
+      });
     } finally {
       setSavingTokenProfileId(null);
     }
@@ -282,11 +642,19 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
       if (result.success) {
         await loadAutoSwitchSettings();
       } else {
-        alert(`Failed to update settings: ${result.error || 'Please try again.'}`);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to update settings',
+          description: result.error || 'Please try again.',
+        });
       }
     } catch (err) {
       console.error('Failed to update auto-switch settings:', err);
-      alert('Failed to update settings. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update settings',
+        description: 'Please try again.',
+      });
     } finally {
       setIsLoadingAutoSwitch(false);
     }
@@ -777,6 +1145,344 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Auto-Claude Engine Section */}
+        <div className="space-y-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            <Bot className="h-4 w-4 text-muted-foreground" />
+            <h4 className="text-sm font-semibold text-foreground">Auto-Claude Engine</h4>
+          </div>
+
+          <div className="rounded-lg bg-muted/30 border border-border p-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Select which engine runs build tasks (spec → plan → implement → QA).
+            </p>
+
+            {isLoadingSourceEnv ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading engine settings…
+              </div>
+            ) : (
+              <>
+                {!sourceEnv?.sourcePath ? (
+                  <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-muted-foreground">
+                    Auto-Claude source path not found. Configure it in Settings → Paths.
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Build engine</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Stored in <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">auto-claude/.env</code>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={sourceEnv?.autoClaudeEngine || 'claude'}
+                          onChange={(e) => handleAutoClaudeEngineChange(e.target.value as AutoClaudeEngineName)}
+                          disabled={!sourceEnv?.sourcePath || isUpdatingSourceEnv}
+                          className={cn(
+                            'h-9 rounded-md border border-border bg-background px-3 text-sm',
+                            isUpdatingSourceEnv && 'opacity-60 cursor-not-allowed'
+                          )}
+                        >
+                          <option value="claude">Claude (default)</option>
+                          <option value="codex">Codex (ChatGPT)</option>
+                        </select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={loadSourceEnv}
+                          disabled={isLoadingSourceEnv || isUpdatingSourceEnv}
+                          className="gap-1"
+                        >
+                          <RefreshCw className={cn('h-3.5 w-3.5', (isLoadingSourceEnv || isUpdatingSourceEnv) && 'animate-spin')} />
+                          Refresh
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Default model</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Sets <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">AUTO_BUILD_MODEL</code> (engine-specific).
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={autoBuildModel}
+                          onChange={(e) => setAutoBuildModel(e.target.value)}
+                          placeholder={(sourceEnv?.autoClaudeEngine || 'claude') === 'codex' ? 'o3' : 'claude-opus-4-5-20251101'}
+                          disabled={!sourceEnv?.sourcePath || isUpdatingSourceEnv}
+                          className="h-9 w-64 font-mono text-xs"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAutoBuildModelSave}
+                          disabled={!sourceEnv?.sourcePath || isUpdatingSourceEnv}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {sourceEnvError && (
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-muted-foreground">
+                    {sourceEnvError}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-border/50 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Codex login</Label>
+                      <p className="text-xs text-muted-foreground flex items-center gap-2">
+                        {isCheckingCodexStatus ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Checking…
+                          </>
+                        ) : codexStatus?.authenticated ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-success" />
+                            Logged in using ChatGPT
+                          </>
+                        ) : codexStatus?.loginMethod === 'api_key' ? (
+                          <>
+                            <AlertCircle className="h-3.5 w-3.5 text-warning" />
+                            Logged in via API key mode (unsupported)
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="h-3.5 w-3.5 text-warning" />
+                            Not logged in
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadCodexLoginStatus}
+                        disabled={isCheckingCodexStatus}
+                        className="gap-1"
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5', isCheckingCodexStatus && 'animate-spin')} />
+                        Check
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleCodexLogin}
+                        disabled={isStartingCodexLogin}
+                        className="gap-1"
+                      >
+                        {isStartingCodexLogin ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <LogIn className="h-3.5 w-3.5" />
+                        )}
+                        Login
+                      </Button>
+                    </div>
+                  </div>
+
+                  {codexStatus?.error && !codexStatus.authenticated && (
+                    <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-muted-foreground">
+                      {codexStatus.error}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Codex execpolicy</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Generate <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">~/.codex/rules/auto-claude.rules</code> from this project&apos;s security profile.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isCheckingCodexExecpolicy ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Checking status…
+                          </span>
+                        ) : (
+                          <>
+                            {codexExecpolicyStatus?.installed ? (
+                              <>
+                                Status: <span className="text-success">installed</span>
+                                {codexExecpolicyStatus.valid === true ? (
+                                  <> · <span className="text-success">valid</span></>
+                                ) : codexExecpolicyStatus.valid === false ? (
+                                  <> · <span className="text-warning">invalid</span></>
+                                ) : null}
+                                {typeof codexExecpolicyStatus.ruleCount === 'number' ? ` · ${codexExecpolicyStatus.ruleCount} rules` : ''}
+                                {codexExecpolicyStatus.generatedAt ? ` · ${codexExecpolicyStatus.generatedAt}` : ''}
+                                {codexExecpolicyStatus.projectPath ? (
+                                  <>
+                                    <br />
+                                    Last generated for: <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">{codexExecpolicyStatus.projectPath}</code>
+                                  </>
+                                ) : null}
+                              </>
+                            ) : codexExecpolicyStatus ? (
+                              <>Status: <span className="text-warning">not installed</span></>
+                            ) : (
+                              <>Status: <span className="text-warning">unknown</span></>
+                            )}
+                            {codexExecpolicyStatus?.rulesPath ? (
+                              <>
+                                <br />
+                                Rules file: <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">{codexExecpolicyStatus.rulesPath}</code>
+                              </>
+                            ) : null}
+                            {codexExecpolicyStatus?.installed && codexExecpolicyStatus.valid === false && codexExecpolicyStatus.validationError ? (
+                              <>
+                                <br />
+                                <span className="text-warning">Validation:</span> {codexExecpolicyStatus.validationError}
+                              </>
+                            ) : null}
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadCodexExecpolicyStatus}
+                        disabled={isCheckingCodexExecpolicy}
+                        className="gap-1"
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5', isCheckingCodexExecpolicy && 'animate-spin')} />
+                        Check
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyCodexExecpolicyPath}
+                        disabled={!codexExecpolicyStatus?.rulesPath}
+                        className="gap-1"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRevealCodexExecpolicyRules}
+                        disabled={!codexExecpolicyStatus?.installed || !codexExecpolicyStatus?.rulesPath}
+                        className="gap-1"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        Reveal
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleInstallCodexExecpolicy}
+                        disabled={isInstallingCodexExecpolicy || !selectedProjectPath}
+                        className="gap-1"
+                        title={!selectedProjectPath ? 'Select a project to enable this action' : undefined}
+                      >
+                        {isInstallingCodexExecpolicy ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Shield className="h-3.5 w-3.5" />
+                        )}
+                        Install
+                      </Button>
+                    </div>
+                  </div>
+
+                  {codexExecpolicyError && (
+                    <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-muted-foreground">
+                      {codexExecpolicyError}
+                    </div>
+                  )}
+
+                  {((sourceEnv?.autoClaudeEngine || 'claude') === 'codex') && codexExecpolicyStatus && !codexExecpolicyStatus.installed && (
+                    <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-muted-foreground">
+                      Codex engine is selected, but execpolicy rules are not installed. Install them to reduce friction when running common commands.
+                    </div>
+                  )}
+
+                  <div className="rounded-lg bg-muted/20 border border-border/50 p-3 space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Codex execution</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Stored in <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">auto-claude/.env</code> and used for non-interactive <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">codex exec</code> runs.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Approvals</Label>
+                        <p className="text-xs text-muted-foreground">Auto is TTY-aware (UI tasks are non-interactive → <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">never</code>).</p>
+                      </div>
+                      <select
+                        value={codexApprovalPolicy}
+                        onChange={(e) => handleCodexApprovalPolicyChange(e.target.value)}
+                        disabled={!sourceEnv?.sourcePath || isUpdatingSourceEnv}
+                        className={cn(
+                          'h-9 rounded-md border border-border bg-background px-3 text-sm',
+                          isUpdatingSourceEnv && 'opacity-60 cursor-not-allowed'
+                        )}
+                      >
+                        <option value="">Auto (default)</option>
+                        {(['untrusted', 'on-failure', 'on-request', 'never'] as CodexApprovalPolicy[]).map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Sandbox</Label>
+                        <p className="text-xs text-muted-foreground">Workspace-write is the default.</p>
+                      </div>
+                      <select
+                        value={codexSandboxMode}
+                        onChange={(e) => handleCodexSandboxModeChange(e.target.value)}
+                        disabled={!sourceEnv?.sourcePath || isUpdatingSourceEnv}
+                        className={cn(
+                          'h-9 rounded-md border border-border bg-background px-3 text-sm',
+                          isUpdatingSourceEnv && 'opacity-60 cursor-not-allowed'
+                        )}
+                      >
+                        <option value="">workspace-write (default)</option>
+                        {(['read-only', 'workspace-write', 'danger-full-access'] as CodexSandboxMode[]).map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {((sourceEnv?.autoClaudeEngine || 'claude') === 'codex') && autoBuildModel.toLowerCase().startsWith('claude') && (
+                    <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-muted-foreground">
+                      <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">AUTO_BUILD_MODEL</code> is set to a Claude model ID. Codex ignores Claude model IDs — set an OpenAI model ID (e.g. <code className="px-1 py-0.5 bg-muted rounded font-mono text-xs">o3</code>) or clear it.
+                    </div>
+                  )}
+
+                  {((sourceEnv?.autoClaudeEngine || 'claude') === 'codex') && codexStatus && !codexStatus.authenticated && (
+                    <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-muted-foreground">
+                      Codex engine is selected, but you are not logged in using ChatGPT. Click “Login” and complete the browser flow.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

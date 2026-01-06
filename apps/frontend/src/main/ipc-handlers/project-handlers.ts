@@ -1,8 +1,6 @@
-import { ipcMain, app } from 'electron';
-import { existsSync, readFileSync } from 'fs';
-import path from 'path';
+import { ipcMain } from 'electron';
+import { existsSync } from 'fs';
 import { execFileSync } from 'child_process';
-import { is } from '@electron-toolkit/utils';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   Project,
@@ -28,6 +26,7 @@ import { insightsService } from '../insights-service';
 import { titleGenerator } from '../title-generator';
 import type { BrowserWindow } from 'electron';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 // ============================================
 // Git Helper Functions
@@ -101,8 +100,6 @@ function detectMainBranch(projectPath: string): string | null {
   // Fallback: return the first branch (usually the current one)
   return branches[0] || null;
 }
-
-const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
 /**
  * Configure all Python-dependent services with the managed Python path
@@ -229,7 +226,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.TAB_STATE_GET,
     async (): Promise<IPCResult<{ openProjectIds: string[]; activeProjectId: string | null; tabOrder: string[] }>> => {
       const tabState = projectStore.getTabState();
-      console.log('[IPC] TAB_STATE_GET returning:', tabState);
+      debugLog('[IPC] TAB_STATE_GET returning:', tabState);
       return { success: true, data: tabState };
     }
   );
@@ -240,7 +237,7 @@ export function registerProjectHandlers(
       _,
       tabState: { openProjectIds: string[]; activeProjectId: string | null; tabOrder: string[] }
     ): Promise<IPCResult> => {
-      console.log('[IPC] TAB_STATE_SAVE called with:', tabState);
+      debugLog('[IPC] TAB_STATE_SAVE called with:', tabState);
       projectStore.saveTabState(tabState);
       return { success: true };
     }

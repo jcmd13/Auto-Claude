@@ -6,6 +6,7 @@ import { app } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import type { UpdateMetadata } from './types';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Get the current app/framework version from package.json
@@ -23,8 +24,6 @@ export function getBundledVersion(): string {
  * otherwise returns the bundled version.
  */
 export function getEffectiveVersion(): string {
-  const isDebug = process.env.DEBUG === 'true';
-
   // Build list of paths to check for update metadata
   const metadataPaths: string[] = [];
 
@@ -47,38 +46,28 @@ export function getEffectiveVersion(): string {
     }
   }
 
-  if (isDebug) {
-    console.log('[Version] Checking metadata paths:', metadataPaths);
-  }
+  debugLog('[Version] Checking metadata paths:', metadataPaths);
 
   // Check each path for metadata
   for (const metadataPath of metadataPaths) {
     const exists = existsSync(metadataPath);
-    if (isDebug) {
-      console.log(`[Version] Checking ${metadataPath}: ${exists ? 'EXISTS' : 'not found'}`);
-    }
+    debugLog(`[Version] Checking ${metadataPath}: ${exists ? 'EXISTS' : 'not found'}`);
     if (exists) {
       try {
         const metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as UpdateMetadata;
         if (metadata.version) {
-          if (isDebug) {
-            console.log(`[Version] Found metadata version: ${metadata.version}`);
-          }
+          debugLog(`[Version] Found metadata version: ${metadata.version}`);
           return metadata.version;
         }
       } catch (e) {
-        if (isDebug) {
-          console.log(`[Version] Error reading metadata: ${e}`);
-        }
+        debugLog(`[Version] Error reading metadata: ${e}`);
         // Continue to next path
       }
     }
   }
 
   const bundledVersion = app.getVersion();
-  if (isDebug) {
-    console.log(`[Version] No metadata found, using bundled version: ${bundledVersion}`);
-  }
+  debugLog(`[Version] No metadata found, using bundled version: ${bundledVersion}`);
   return bundledVersion;
 }
 

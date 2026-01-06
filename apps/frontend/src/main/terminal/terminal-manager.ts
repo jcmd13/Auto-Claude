@@ -17,6 +17,7 @@ import * as SessionHandler from './session-handler';
 import * as TerminalLifecycle from './terminal-lifecycle';
 import * as TerminalEventHandler from './terminal-event-handler';
 import * as ClaudeIntegration from './claude-integration-handler';
+import * as CodexIntegration from './codex-integration-handler';
 
 export class TerminalManager {
   private terminals: Map<string, TerminalProcess> = new Map();
@@ -157,6 +158,18 @@ export class TerminalManager {
   }
 
   /**
+   * Invoke Codex in a terminal
+   */
+  invokeCodex(id: string, cwd?: string): void {
+    const terminal = this.terminals.get(id);
+    if (!terminal) {
+      return;
+    }
+
+    CodexIntegration.invokeCodex(terminal, cwd, this.getWindow);
+  }
+
+  /**
    * Switch a terminal to a different Claude profile
    */
   async switchClaudeProfile(id: string, profileId: string): Promise<TerminalOperationResult> {
@@ -184,6 +197,18 @@ export class TerminalManager {
     }
 
     ClaudeIntegration.resumeClaude(terminal, sessionId, this.getWindow);
+  }
+
+  /**
+   * Resume Codex in a terminal (most recent session)
+   */
+  resumeCodex(id: string): void {
+    const terminal = this.terminals.get(id);
+    if (!terminal) {
+      return;
+    }
+
+    CodexIntegration.resumeCodex(terminal, this.getWindow);
   }
 
   /**
@@ -259,6 +284,14 @@ export class TerminalManager {
   isClaudeMode(id: string): boolean {
     const terminal = this.terminals.get(id);
     return terminal?.isClaudeMode ?? false;
+  }
+
+  /**
+   * Check if a terminal is in Codex mode
+   */
+  isCodexMode(id: string): boolean {
+    const terminal = this.terminals.get(id);
+    return terminal?.isCodexMode ?? false;
   }
 
   /**

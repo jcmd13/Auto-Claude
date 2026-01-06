@@ -6,6 +6,8 @@ import { AgentEvents } from './agent-events';
 import { AgentProcessManager } from './agent-process';
 import { AgentQueueManager } from './agent-queue';
 import { getClaudeProfileManager } from '../claude-profile-manager';
+import { checkCodexLoginStatus } from '../codex-auth';
+import { debugLog } from '../../shared/utils/debug-logger';
 import {
   SpecCreationMetadata,
   TaskExecutionOptions,
@@ -45,9 +47,9 @@ export class AgentManager extends EventEmitter {
 
     // Listen for auto-swap restart events
     this.on('auto-swap-restart-task', (taskId: string, newProfileId: string) => {
-      console.log('[AgentManager] Received auto-swap-restart-task event:', { taskId, newProfileId });
+      debugLog('[AgentManager] Received auto-swap-restart-task event:', { taskId, newProfileId });
       const success = this.restartTask(taskId, newProfileId);
-      console.log('[AgentManager] Task restart result:', success ? 'SUCCESS' : 'FAILED');
+      debugLog('[AgentManager] Task restart result:', success ? 'SUCCESS' : 'FAILED');
     });
 
     // Listen for task completion to clean up context (prevent memory leak)
@@ -85,6 +87,31 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
+   * Resolve the selected agent engine for a project.
+   *
+   * Priority:
+   * 1) Process env var (AUTO_CLAUDE_ENGINE)
+   * 2) Auto-Claude source .env (loaded via AgentProcessManager)
+   */
+  getEngineName(projectPath: string): string {
+    const fromProcess = (process.env.AUTO_CLAUDE_ENGINE || '').trim().toLowerCase();
+    if (fromProcess) {
+      return fromProcess;
+    }
+
+    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    return (combinedEnv['AUTO_CLAUDE_ENGINE'] || 'claude').trim().toLowerCase();
+  }
+
+  /**
+   * True if the selected engine is Codex.
+   */
+  isCodexEngine(projectPath: string): boolean {
+    const engine = this.getEngineName(projectPath);
+    return engine === 'codex' || engine === 'codex_cli';
+  }
+
+  /**
    * Start spec creation process
    */
   startSpecCreation(
@@ -95,68 +122,89 @@ export class AgentManager extends EventEmitter {
     metadata?: SpecCreationMetadata,
     baseBranch?: string
   ): void {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
-    }
-
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
-
-    if (!autoBuildSource) {
-      this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
-      return;
-    }
-
-    const specRunnerPath = path.join(autoBuildSource, 'runners', 'spec_runner.py');
-
-    if (!existsSync(specRunnerPath)) {
-      this.emit('error', taskId, `Spec runner not found at: ${specRunnerPath}`);
-      return;
-    }
-
-    // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
-
-    // spec_runner.py will auto-start run.py after spec creation completes
-    const args = [specRunnerPath, '--task', taskDescription, '--project-dir', projectPath];
-
-    // Pass spec directory if provided (for UI-created tasks that already have a directory)
-    if (specDir) {
-      args.push('--spec-dir', specDir);
-    }
-
-    // Pass base branch if specified (ensures worktrees are created from the correct branch)
-    if (baseBranch) {
-      args.push('--base-branch', baseBranch);
-    }
-
-    // Check if user requires review before coding
-    if (!metadata?.requireReviewBeforeCoding) {
-      // Auto-approve: When user starts a task from the UI without requiring review
-      args.push('--auto-approve');
-    }
-
-    // Pass model and thinking level configuration
-    // For auto profile, use phase-specific config; otherwise use single model/thinking
-    if (metadata?.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
-      // Pass the spec phase model and thinking level to spec_runner
-      args.push('--model', metadata.phaseModels.spec);
-      args.push('--thinking-level', metadata.phaseThinking.spec);
-    } else if (metadata?.model) {
-      // Non-auto profile: use single model and thinking level
-      args.push('--model', metadata.model);
-      if (metadata.thinkingLevel) {
-        args.push('--thinking-level', metadata.thinkingLevel);
+    void (async () => {
+      // Pre-flight auth check
+      if (this.isCodexEngine(projectPath)) {
+        const codexAuth = await checkCodexLoginStatus();
+        if (!codexAuth.success) {
+          this.emit('error', taskId, codexAuth.error || 'Codex authentication check failed. Please try again.');
+          return;
+        }
+        if (!codexAuth.authenticated) {
+          this.emit(
+            'error',
+            taskId,
+            codexAuth.loginMethod === 'api_key'
+              ? 'Codex is logged in via API key mode. Please run "codex login" and choose "Sign in with ChatGPT".'
+              : 'Codex login required. Go to Settings > Integrations and click “Login” under Codex.'
+          );
+          return;
+        }
+      } else {
+        const profileManager = getClaudeProfileManager();
+        if (!profileManager.hasValidAuth()) {
+          this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+          return;
+        }
       }
-    }
+      const autoBuildSource = this.processManager.getAutoBuildSourcePath();
 
-    // Store context for potential restart
-    this.storeTaskContext(taskId, projectPath, '', {}, true, taskDescription, specDir, metadata, baseBranch);
+      if (!autoBuildSource) {
+        this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
+        return;
+      }
 
-    // Note: This is spec-creation but it chains to task-execution via run.py
-    this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
+      const specRunnerPath = path.join(autoBuildSource, 'runners', 'spec_runner.py');
+
+      if (!existsSync(specRunnerPath)) {
+        this.emit('error', taskId, `Spec runner not found at: ${specRunnerPath}`);
+        return;
+      }
+
+      // Get combined environment variables
+      const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+
+      // spec_runner.py will auto-start run.py after spec creation completes
+      const args = [specRunnerPath, '--task', taskDescription, '--project-dir', projectPath];
+
+      // Pass spec directory if provided (for UI-created tasks that already have a directory)
+      if (specDir) {
+        args.push('--spec-dir', specDir);
+      }
+
+      // Pass base branch if specified (ensures worktrees are created from the correct branch)
+      if (baseBranch) {
+        args.push('--base-branch', baseBranch);
+      }
+
+      // Check if user requires review before coding
+      if (!metadata?.requireReviewBeforeCoding) {
+        // Auto-approve: When user starts a task from the UI without requiring review
+        args.push('--auto-approve');
+      }
+
+      // Pass model and thinking level configuration
+      // For auto profile, use phase-specific config; otherwise use single model/thinking
+      if (metadata?.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
+        // Pass the spec phase model and thinking level to spec_runner
+        args.push('--model', metadata.phaseModels.spec);
+        args.push('--thinking-level', metadata.phaseThinking.spec);
+      } else if (metadata?.model) {
+        // Non-auto profile: use single model and thinking level
+        args.push('--model', metadata.model);
+        if (metadata.thinkingLevel) {
+          args.push('--thinking-level', metadata.thinkingLevel);
+        }
+      }
+
+      // Store context for potential restart
+      this.storeTaskContext(taskId, projectPath, '', {}, true, taskDescription, specDir, metadata, baseBranch);
+
+      // Note: This is spec-creation but it chains to task-execution via run.py
+      this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
+    })().catch((err) => {
+      this.emit('error', taskId, err instanceof Error ? err.message : 'Failed to start spec creation');
+    });
   }
 
   /**
@@ -168,52 +216,74 @@ export class AgentManager extends EventEmitter {
     specId: string,
     options: TaskExecutionOptions = {}
   ): void {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
-    }
+    void (async () => {
+      // Pre-flight auth check
+      if (this.isCodexEngine(projectPath)) {
+        const codexAuth = await checkCodexLoginStatus();
+        if (!codexAuth.success) {
+          this.emit('error', taskId, codexAuth.error || 'Codex authentication check failed. Please try again.');
+          return;
+        }
+        if (!codexAuth.authenticated) {
+          this.emit(
+            'error',
+            taskId,
+            codexAuth.loginMethod === 'api_key'
+              ? 'Codex is logged in via API key mode. Please run "codex login" and choose "Sign in with ChatGPT".'
+              : 'Codex login required. Go to Settings > Integrations and click “Login” under Codex.'
+          );
+          return;
+        }
+      } else {
+        const profileManager = getClaudeProfileManager();
+        if (!profileManager.hasValidAuth()) {
+          this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+          return;
+        }
+      }
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+      const autoBuildSource = this.processManager.getAutoBuildSourcePath();
 
-    if (!autoBuildSource) {
-      this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
-      return;
-    }
+      if (!autoBuildSource) {
+        this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
+        return;
+      }
 
-    const runPath = path.join(autoBuildSource, 'run.py');
+      const runPath = path.join(autoBuildSource, 'run.py');
 
-    if (!existsSync(runPath)) {
-      this.emit('error', taskId, `Run script not found at: ${runPath}`);
-      return;
-    }
+      if (!existsSync(runPath)) {
+        this.emit('error', taskId, `Run script not found at: ${runPath}`);
+        return;
+      }
 
-    // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+      // Get combined environment variables
+      const combinedEnv = this.processManager.getCombinedEnv(projectPath);
 
-    const args = [runPath, '--spec', specId, '--project-dir', projectPath];
+      const args = [runPath, '--spec', specId, '--project-dir', projectPath];
 
-    // Always use auto-continue when running from UI (non-interactive)
-    args.push('--auto-continue');
+      // Always use auto-continue when running from UI (non-interactive)
+      args.push('--auto-continue');
 
-    // Force: When user starts a task from the UI, that IS their approval
-    args.push('--force');
+      // Force: When user starts a task from the UI, that IS their approval
+      args.push('--force');
 
-    // Pass base branch if specified (ensures worktrees are created from the correct branch)
-    if (options.baseBranch) {
-      args.push('--base-branch', options.baseBranch);
-    }
+      // Pass base branch if specified (ensures worktrees are created from the correct branch)
+      if (options.baseBranch) {
+        args.push('--base-branch', options.baseBranch);
+      }
 
-    // Note: --parallel was removed from run.py CLI - parallel execution is handled internally by the agent
-    // The options.parallel and options.workers are kept for future use or logging purposes
-    // Note: Model configuration is read from task_metadata.json by the Python scripts,
-    // which allows per-phase configuration for planner, coder, and QA phases
+      // Note: --parallel was removed from run.py CLI - parallel execution is handled internally by the agent
+      // The options.parallel and options.workers are kept for future use or logging purposes
+      // Note: Model configuration is read from task_metadata.json by the Python scripts,
+      // which allows per-phase configuration for planner, coder, and QA phases
 
-    // Store context for potential restart
-    this.storeTaskContext(taskId, projectPath, specId, options, false);
+      // Store context for potential restart
+      this.storeTaskContext(taskId, projectPath, specId, options, false);
 
-    this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
+      this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
+    })().catch((err) => {
+      this.emit('error', taskId, err instanceof Error ? err.message : 'Failed to start task execution');
+    });
   }
 
   /**
@@ -365,16 +435,16 @@ export class AgentManager extends EventEmitter {
    * @param newProfileId - Optional new profile ID to apply (from auto-swap)
    */
   restartTask(taskId: string, newProfileId?: string): boolean {
-    console.log('[AgentManager] restartTask called for:', taskId, 'with newProfileId:', newProfileId);
+    debugLog('[AgentManager] restartTask called for:', taskId, 'with newProfileId:', newProfileId);
 
     const context = this.taskExecutionContext.get(taskId);
     if (!context) {
       console.error('[AgentManager] No context for task:', taskId);
-      console.log('[AgentManager] Available task contexts:', Array.from(this.taskExecutionContext.keys()));
+      debugLog('[AgentManager] Available task contexts:', Array.from(this.taskExecutionContext.keys()));
       return false;
     }
 
-    console.log('[AgentManager] Task context found:', {
+    debugLog('[AgentManager] Task context found:', {
       taskId,
       projectPath: context.projectPath,
       specId: context.specId,
@@ -389,28 +459,28 @@ export class AgentManager extends EventEmitter {
     }
 
     context.swapCount++;
-    console.log('[AgentManager] Incremented swap count to:', context.swapCount);
+    debugLog('[AgentManager] Incremented swap count to:', context.swapCount);
 
     // If a new profile was specified, ensure it's set as active before restart
     if (newProfileId) {
       const profileManager = getClaudeProfileManager();
       const currentActiveId = profileManager.getActiveProfile()?.id;
       if (currentActiveId !== newProfileId) {
-        console.log('[AgentManager] Setting active profile to:', newProfileId);
+        debugLog('[AgentManager] Setting active profile to:', newProfileId);
         profileManager.setActiveProfile(newProfileId);
       }
     }
 
     // Kill current process
-    console.log('[AgentManager] Killing current process for task:', taskId);
+    debugLog('[AgentManager] Killing current process for task:', taskId);
     this.killTask(taskId);
 
     // Wait for cleanup, then restart
-    console.log('[AgentManager] Scheduling task restart in 500ms');
+    debugLog('[AgentManager] Scheduling task restart in 500ms');
     setTimeout(() => {
-      console.log('[AgentManager] Restarting task now:', taskId);
+      debugLog('[AgentManager] Restarting task now:', taskId);
       if (context.isSpecCreation) {
-        console.log('[AgentManager] Restarting as spec creation');
+        debugLog('[AgentManager] Restarting as spec creation');
         this.startSpecCreation(
           taskId,
           context.projectPath,
@@ -420,7 +490,7 @@ export class AgentManager extends EventEmitter {
           context.baseBranch
         );
       } else {
-        console.log('[AgentManager] Restarting as task execution');
+        debugLog('[AgentManager] Restarting as task execution');
         this.startTaskExecution(
           taskId,
           context.projectPath,

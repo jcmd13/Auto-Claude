@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Settings,
-  Trash2,
   LayoutGrid,
   Terminal,
   Map,
@@ -46,6 +45,7 @@ import {
   initializeProject
 } from '../stores/project-store';
 import { useSettingsStore } from '../stores/settings-store';
+import { useSourceEnvStore } from '../stores/source-env-store';
 import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
@@ -102,8 +102,8 @@ export function Sidebar({
   const { t } = useTranslation(['navigation', 'dialogs', 'common']);
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
-  const selectProject = useProjectStore((state) => state.selectProject);
   const settings = useSettingsStore((state) => state.settings);
+  const autoClaudeEngine = useSourceEnvStore((state) => state.sourceEnv?.autoClaudeEngine || 'claude');
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -208,10 +208,6 @@ export function Sidebar({
     checkGit();
   }, [selectedProject]);
 
-  const handleAddProject = () => {
-    setShowAddProjectModal(true);
-  };
-
   const handleProjectAdded = (project: Project, needsInit: boolean) => {
     if (needsInit) {
       setPendingProject(project);
@@ -299,7 +295,9 @@ export function Sidebar({
       <div className="flex h-full w-64 flex-col bg-sidebar border-r border-border">
         {/* Header with drag area - extra top padding for macOS traffic lights */}
         <div className="electron-drag flex h-14 items-center px-4 pt-6">
-          <span className="electron-no-drag text-lg font-bold text-primary">Auto Claude</span>
+          <span className="electron-no-drag text-lg font-bold text-primary">
+            {autoClaudeEngine === 'codex' ? 'Auto Codex' : 'Auto Claude'}
+          </span>
         </div>
 
         <Separator className="mt-2" />

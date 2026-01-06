@@ -144,7 +144,6 @@ export function WorkspaceStatus({
 
   // Has path-mapped files that need AI merge
   const hasPathMappedMerges = pathMappedAIMergeCount > 0;
-
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header with stats */}

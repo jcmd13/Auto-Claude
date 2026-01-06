@@ -15,8 +15,7 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  arrayMove
+  verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { Plus, Inbox, Eye, Calendar, Play, Check } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';

@@ -57,6 +57,13 @@ export function registerTerminalHandlers(
     }
   );
 
+  ipcMain.on(
+    IPC_CHANNELS.TERMINAL_INVOKE_CODEX,
+    (_, id: string, cwd?: string) => {
+      terminalManager.invokeCodex(id, cwd);
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.TERMINAL_GENERATE_NAME,
     async (_, command: string, cwd?: string): Promise<IPCResult<string>> => {
@@ -600,6 +607,13 @@ export function registerTerminalHandlers(
     IPC_CHANNELS.TERMINAL_RESUME_CLAUDE,
     (_, id: string, sessionId?: string) => {
       terminalManager.resumeClaude(id, sessionId);
+    }
+  );
+
+  ipcMain.on(
+    IPC_CHANNELS.TERMINAL_RESUME_CODEX,
+    (_, id: string) => {
+      terminalManager.resumeCodex(id);
     }
   );
 

@@ -15,7 +15,7 @@ export function useAutoNaming({ terminalId, cwd }: UseAutoNamingOptions) {
   const updateTerminal = useTerminalStore((state) => state.updateTerminal);
 
   const triggerAutoNaming = useCallback(async () => {
-    if (!autoNameTerminals || terminal?.isClaudeMode || !lastCommandRef.current.trim()) {
+    if (!autoNameTerminals || terminal?.isClaudeMode || terminal?.isCodexMode || !lastCommandRef.current.trim()) {
       return;
     }
 
@@ -66,7 +66,7 @@ export function useAutoNaming({ terminalId, cwd }: UseAutoNamingOptions) {
     } catch (error) {
       console.warn('[Terminal] Auto-naming failed:', error);
     }
-  }, [autoNameTerminals, terminal?.isClaudeMode, terminal?.cwd, cwd, terminalId, updateTerminal]);
+  }, [autoNameTerminals, terminal?.isClaudeMode, terminal?.isCodexMode, terminal?.cwd, cwd, terminalId, updateTerminal]);
 
   const handleCommandEnter = useCallback((command: string) => {
     lastCommandRef.current = command;

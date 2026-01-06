@@ -499,4 +499,21 @@ export function registerSettingsHandlers(
       }
     }
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.SHELL_SHOW_ITEM_IN_FOLDER,
+    async (_, itemPath: string): Promise<boolean> => {
+      try {
+        if (!itemPath || typeof itemPath !== 'string' || itemPath.trim() === '') {
+          return false;
+        }
+
+        const resolvedPath = path.resolve(itemPath);
+        return shell.showItemInFolder(resolvedPath);
+      } catch (error) {
+        console.warn('[SHELL_SHOW_ITEM_IN_FOLDER] Failed to show item:', error);
+        return false;
+      }
+    }
+  );
 }

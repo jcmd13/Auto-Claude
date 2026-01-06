@@ -7,6 +7,7 @@ import type {
   RoadmapGenerationStatus,
   FeatureSource
 } from '../../shared/types';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Migrate roadmap data to latest schema
@@ -35,7 +36,7 @@ function migrateRoadmapIfNeeded(roadmap: Roadmap): Roadmap {
   });
 
   if (needsMigration) {
-    console.log('[Roadmap] Migrated roadmap data to latest schema');
+    debugLog('[Roadmap] Migrated roadmap data to latest schema');
     return {
       ...roadmap,
       features: migratedFeatures,
@@ -301,7 +302,7 @@ export function generateRoadmap(
 ): void {
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Roadmap] Starting generation:', { projectId, enableCompetitorAnalysis, refreshCompetitorAnalysis });
+    debugLog('[Roadmap] Starting generation:', { projectId, enableCompetitorAnalysis, refreshCompetitorAnalysis });
   }
 
   useRoadmapStore.getState().setGenerationStatus({
@@ -319,7 +320,7 @@ export function refreshRoadmap(
 ): void {
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Roadmap] Starting refresh:', { projectId, enableCompetitorAnalysis, refreshCompetitorAnalysis });
+    debugLog('[Roadmap] Starting refresh:', { projectId, enableCompetitorAnalysis, refreshCompetitorAnalysis });
   }
 
   useRoadmapStore.getState().setGenerationStatus({
@@ -335,7 +336,7 @@ export async function stopRoadmap(projectId: string): Promise<boolean> {
 
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Roadmap] Stop requested:', { projectId });
+    debugLog('[Roadmap] Stop requested:', { projectId });
   }
 
   // Always update UI state to 'idle' when user requests stop, regardless of backend response
@@ -350,12 +351,12 @@ export async function stopRoadmap(projectId: string): Promise<boolean> {
 
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Roadmap] Stop result:', { projectId, success: result.success });
+    debugLog('[Roadmap] Stop result:', { projectId, success: result.success });
   }
 
   if (!result.success) {
     // Backend couldn't find/stop the process (likely already finished/crashed)
-    console.log('[Roadmap] Process already stopped');
+    debugLog('[Roadmap] Process already stopped');
   }
 
   return result.success;

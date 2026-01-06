@@ -277,10 +277,24 @@ export interface AppSettings {
 }
 
 // Auto-Claude Source Environment Configuration (for auto-claude repo .env)
+export type AutoClaudeEngineName = 'claude' | 'codex';
+export type CodexApprovalPolicy = 'untrusted' | 'on-failure' | 'on-request' | 'never';
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
 export interface SourceEnvConfig {
   // Claude Authentication (required for ideation, roadmap generation, etc.)
   hasClaudeToken: boolean;
   claudeOAuthToken?: string;
+
+  // Default model override for engine runs (optional)
+  autoBuildModel?: string;
+
+  // Selected engine for Auto-Claude task execution
+  autoClaudeEngine?: AutoClaudeEngineName;
+
+  // Codex execution settings (optional)
+  codexApprovalPolicy?: CodexApprovalPolicy;
+  codexSandboxMode?: CodexSandboxMode;
 
   // Source path info
   sourcePath?: string;

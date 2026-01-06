@@ -74,6 +74,19 @@ export default tseslint.config(
     }
   },
   {
+    files: ['scripts/**/*.{js,cjs}'],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    },
+    rules: {
+      // Node scripts intentionally use CommonJS + console output.
+      '@typescript-eslint/no-require-imports': 'off',
+      'no-console': 'off'
+    }
+  },
+  {
     files: ['**/*.cjs'],
     languageOptions: {
       globals: {

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
+import { debugLog } from '../shared/utils/debug-logger';
 
 interface TabState {
   openProjectIds: string[];
@@ -165,7 +166,7 @@ export class ProjectStore {
         : null,
       tabOrder: tabState.tabOrder.filter(id => validProjectIds.includes(id))
     };
-    console.log('[ProjectStore] Saving tab state:', this.data.tabState);
+    debugLog('[ProjectStore] Saving tab state:', this.data.tabState);
     this.save();
   }
 
@@ -417,7 +418,8 @@ export class ProjectStore {
         }
 
         // Determine task status and review reason from plan
-        const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata);
+        const worktreeSpecPath = path.join(project.path, '.worktrees', dir.name, specsBaseDir, dir.name);
+        const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata, worktreeSpecPath);
 
         // Extract subtasks from plan (handle both 'subtasks' and 'chunks' naming)
         const subtasks = plan?.phases?.flatMap((phase) => {
@@ -496,7 +498,8 @@ export class ProjectStore {
   private determineTaskStatusAndReason(
     plan: ImplementationPlan | null,
     specPath: string,
-    metadata?: TaskMetadata
+    metadata?: TaskMetadata,
+    worktreeSpecPath?: string
   ): { status: TaskStatus; reviewReason?: ReviewReason } {
     // Handle both 'subtasks' and 'chunks' naming conventions, filter out undefined
     const allSubtasks = plan?.phases?.flatMap((p) => p.subtasks || (p as { chunks?: PlanSubtask[] }).chunks || []).filter(Boolean) || [];
@@ -589,8 +592,13 @@ export class ProjectStore {
     }
 
     // SECOND: Check QA report file for additional status info
-    const qaReportPath = path.join(specPath, AUTO_BUILD_PATHS.QA_REPORT);
-    if (existsSync(qaReportPath)) {
+    const qaReportPaths = [
+      path.join(specPath, AUTO_BUILD_PATHS.QA_REPORT),
+      ...(worktreeSpecPath ? [path.join(worktreeSpecPath, AUTO_BUILD_PATHS.QA_REPORT)] : [])
+    ];
+
+    for (const qaReportPath of qaReportPaths) {
+      if (!existsSync(qaReportPath)) continue;
       try {
         const content = readFileSync(qaReportPath, 'utf-8');
         if (content.includes('REJECTED') || content.includes('FAILED')) {

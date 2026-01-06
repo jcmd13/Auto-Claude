@@ -5,7 +5,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { ClaudeProfile, ClaudeProfileSettings, ElectronAPI } from '../../shared/types';
+import type { ClaudeProfile } from '../../shared/types';
 
 // Import browser mock to get full ElectronAPI structure
 import '../lib/browser-mock';
@@ -425,17 +425,17 @@ describe('OAuthStep Profile Management Logic', () => {
       expect(profile.isDefault).toBe(true);
     });
 
-    it('should show "Active" badge for active profile', () => {
-      const profiles: ClaudeProfile[] = [
-        createTestProfile({ id: 'p1' }),
-        createTestProfile({ id: 'p2' })
-      ];
-      const activeProfileId = 'p1';
+	    it('should show "Active" badge for active profile', () => {
+	      const profiles: ClaudeProfile[] = [
+	        createTestProfile({ id: 'p1' }),
+	        createTestProfile({ id: 'p2' })
+	      ];
+	      const activeProfileId = 'p1';
 
-      const isActive = (profileId: string) => profileId === activeProfileId;
-      expect(isActive('p1')).toBe(true);
-      expect(isActive('p2')).toBe(false);
-    });
+	      const isActive = (profile: ClaudeProfile) => profile.id === activeProfileId;
+	      expect(isActive(profiles[0])).toBe(true);
+	      expect(isActive(profiles[1])).toBe(false);
+	    });
 
     it('should show "Authenticated" badge when profile has token', () => {
       const profile = createTestProfile({ oauthToken: 'sk-ant-oat01-token' });

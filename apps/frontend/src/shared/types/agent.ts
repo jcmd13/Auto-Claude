@@ -138,3 +138,38 @@ export interface ClaudeAuthResult {
   authenticated: boolean;
   error?: string;
 }
+
+export type CodexLoginMethod = 'chatgpt' | 'api_key' | 'unknown';
+
+export interface CodexAuthResult {
+  success: boolean;
+  /** True only when logged in using ChatGPT (not API key mode) */
+  authenticated: boolean;
+  loginMethod?: CodexLoginMethod;
+  error?: string;
+}
+
+export interface CodexExecpolicyInstallResult {
+  /** Absolute path to the generated rules file (best effort) */
+  rulesPath?: string;
+  /** Raw stdout from the Python invocation (for debugging) */
+  stdout?: string;
+  /** Raw stderr from the Python invocation (for debugging) */
+  stderr?: string;
+}
+
+export interface CodexExecpolicyStatusResult {
+  /** Expected rules file path (based on CODEX_HOME or ~/.codex) */
+  rulesPath: string;
+  /** True if the rules file exists on disk */
+  installed: boolean;
+  /** Best-effort metadata extracted from the rules header */
+  generatedAt?: string;
+  projectPath?: string;
+  /** Best-effort validation of file contents (not just existence) */
+  valid?: boolean;
+  /** Number of parsed prefix_rule entries (best-effort) */
+  ruleCount?: number;
+  /** Validation error message when valid === false */
+  validationError?: string;
+}

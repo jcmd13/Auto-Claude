@@ -105,11 +105,6 @@ export function EnvConfigModal({
             (p: ClaudeProfile) => p.oauthToken || (p.isDefault && p.configDir)
           );
           setClaudeProfiles(authenticatedProfiles);
-
-          // Auto-select first authenticated profile
-          if (authenticatedProfiles.length > 0 && !selectedProfileId) {
-            setSelectedProfileId(authenticatedProfiles[0].id);
-          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
@@ -121,6 +116,15 @@ export function EnvConfigModal({
 
     loadData();
   }, [open]);
+
+  // Auto-select the first authenticated profile when opening
+  useEffect(() => {
+    if (!open) return;
+    if (selectedProfileId) return;
+    if (claudeProfiles.length === 0) return;
+
+    setSelectedProfileId(claudeProfiles[0].id);
+  }, [open, claudeProfiles, selectedProfileId]);
 
   // Listen for OAuth token from terminal
   useEffect(() => {

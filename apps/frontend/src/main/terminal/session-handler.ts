@@ -103,6 +103,7 @@ export function persistSession(terminal: TerminalProcess): void {
     cwd: terminal.cwd,
     projectPath: terminal.projectPath,
     isClaudeMode: terminal.isClaudeMode,
+    isCodexMode: terminal.isCodexMode,
     claudeSessionId: terminal.claudeSessionId,
     outputBuffer: terminal.outputBuffer,
     createdAt: new Date().toISOString(),

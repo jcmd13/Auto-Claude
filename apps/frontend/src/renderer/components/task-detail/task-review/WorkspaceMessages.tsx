@@ -1,4 +1,4 @@
-import { AlertCircle, GitMerge, Loader2, Trash2, Check } from 'lucide-react';
+import { AlertCircle, GitMerge, Loader2, Check } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../ui/button';
 import { persistTaskStatus } from '../../../stores/task-store';
@@ -133,6 +133,12 @@ export function StagedInProjectMessage({ task, projectPath, hasWorktree = false,
       <p className="text-sm text-muted-foreground mb-3">
         This task's changes have been staged in your main project{task.stagedAt ? ` on ${new Date(task.stagedAt).toLocaleDateString()}` : ''}.
       </p>
+      {projectPath && (
+        <p className="text-xs text-muted-foreground mb-3">
+          Project path:{' '}
+          <code className="bg-background px-1 rounded">{projectPath}</code>
+        </p>
+      )}
       <div className="bg-background/50 rounded-lg p-3 mb-3">
         <p className="text-xs text-muted-foreground mb-2">Next steps:</p>
         <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">

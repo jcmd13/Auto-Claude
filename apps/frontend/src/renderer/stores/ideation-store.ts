@@ -9,6 +9,7 @@ import type {
   IdeationSummary
 } from '../../shared/types';
 import { DEFAULT_IDEATION_CONFIG } from '../../shared/constants';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 const GENERATION_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -399,7 +400,7 @@ export function generateIdeation(projectId: string): void {
   const config = store.config;
 
   if (window.DEBUG) {
-    console.log('[Ideation] Starting generation:', {
+    debugLog('[Ideation] Starting generation:', {
       projectId,
       enabledTypes: config.enabledTypes,
       includeRoadmapContext: config.includeRoadmapContext,
@@ -449,7 +450,7 @@ export async function stopIdeation(projectId: string): Promise<boolean> {
 
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Ideation] Stop requested:', { projectId });
+    debugLog('[Ideation] Stop requested:', { projectId });
   }
 
   store.setIsGenerating(false);
@@ -464,7 +465,7 @@ export async function stopIdeation(projectId: string): Promise<boolean> {
 
   // Debug logging
   if (window.DEBUG) {
-    console.log('[Ideation] Stop result:', { projectId, success: result.success });
+    debugLog('[Ideation] Stop result:', { projectId, success: result.success });
   }
 
   if (!result.success) {
@@ -659,7 +660,7 @@ export function setupIdeationListeners(): () => void {
 
     // Debug logging
     if (window.DEBUG) {
-      console.log('[Ideation] Progress update:', {
+      debugLog('[Ideation] Progress update:', {
         projectId,
         phase: status.phase,
         progress: status.progress,
@@ -688,7 +689,7 @@ export function setupIdeationListeners(): () => void {
 
       // Debug logging
       if (window.DEBUG) {
-        console.log('[Ideation] Type completed:', {
+        debugLog('[Ideation] Type completed:', {
           projectId,
           ideationType,
           ideasCount: ideas.length,
@@ -751,7 +752,7 @@ export function setupIdeationListeners(): () => void {
     }
 
     if (window.DEBUG) {
-      console.log('[Ideation] Generation complete:', {
+      debugLog('[Ideation] Generation complete:', {
         projectId,
         totalIdeas: session.ideas.length,
         ideaTypes: session.ideas.reduce((acc, idea) => {

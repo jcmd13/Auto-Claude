@@ -287,6 +287,7 @@ export class ChangelogService extends EventEmitter {
       }
 
       const specDir = path.join(specsDir, task.specId);
+      const worktreeSpecDir = path.join(projectPath, '.worktrees', task.specId, specsBaseDir || AUTO_BUILD_PATHS.SPECS_DIR, task.specId);
       this.debug('Loading spec for task', { taskId, specId: task.specId, specDir });
 
       const content: TaskSpecContent = {
@@ -309,9 +310,15 @@ export class ChangelogService extends EventEmitter {
         }
 
         // Load qa_report.md
-        const qaReportPath = path.join(specDir, AUTO_BUILD_PATHS.QA_REPORT);
-        if (existsSync(qaReportPath)) {
-          content.qaReport = readFileSync(qaReportPath, 'utf-8');
+        const qaReportPaths = [
+          path.join(specDir, AUTO_BUILD_PATHS.QA_REPORT),
+          path.join(worktreeSpecDir, AUTO_BUILD_PATHS.QA_REPORT)
+        ];
+        for (const qaReportPath of qaReportPaths) {
+          if (existsSync(qaReportPath)) {
+            content.qaReport = readFileSync(qaReportPath, 'utf-8');
+            break;
+          }
         }
 
         // Load implementation_plan.json

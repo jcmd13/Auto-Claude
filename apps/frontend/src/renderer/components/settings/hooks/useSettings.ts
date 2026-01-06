@@ -36,13 +36,17 @@ export function useSettings() {
 
   // Load settings on mount and capture original theme
   useEffect(() => {
-    loadSettingsFromStore();
-    // Update the original theme ref when settings load
-    originalThemeRef.current = {
-      theme: currentSettings.theme,
-      colorTheme: currentSettings.colorTheme,
-      uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
+    const loadSettings = async () => {
+      await loadSettingsFromStore();
+      const loadedSettings = useSettingsStore.getState().settings;
+      originalThemeRef.current = {
+        theme: loadedSettings.theme,
+        colorTheme: loadedSettings.colorTheme,
+        uiScale: loadedSettings.uiScale ?? UI_SCALE_DEFAULT
+      };
     };
+
+    void loadSettings();
   }, []);
 
   const saveSettings = async () => {

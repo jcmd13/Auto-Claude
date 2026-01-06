@@ -11,7 +11,7 @@ import { getClaudeProfileManager } from '../claude-profile-manager';
 import * as OutputParser from './output-parser';
 import * as SessionHandler from './session-handler';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
-import { escapeShellArg, buildCdCommand } from '../../shared/utils/shell-escape';
+import { escapeShellArg, escapeShellArgWindows, buildCdCommand } from '../../shared/utils/shell-escape';
 import type {
   TerminalProcess,
   WindowGetter,
@@ -211,6 +211,7 @@ export function invokeClaude(
   debugLog('[ClaudeIntegration:invokeClaude] CWD:', cwd);
 
   terminal.isClaudeMode = true;
+  terminal.isCodexMode = false;
   terminal.claudeSessionId = undefined;
 
   const startTime = Date.now();
@@ -235,12 +236,15 @@ export function invokeClaude(
   // Use safe shell escaping to prevent command injection
   const cwdCommand = buildCdCommand(cwd);
   const needsEnvOverride = profileId && profileId !== previousProfileId;
+  const clearCommand = process.platform === 'win32' ? 'cls' : 'clear';
 
   debugLog('[ClaudeIntegration:invokeClaude] Environment override check:', {
     profileIdProvided: !!profileId,
     previousProfileId,
     needsEnvOverride
   });
+
+  let command = `${cwdCommand}claude\r`;
 
   if (needsEnvOverride && activeProfile && !activeProfile.isDefault) {
     const token = profileManager.getProfileToken(activeProfile.id);
@@ -252,30 +256,57 @@ export function invokeClaude(
     if (token) {
       const tempFile = path.join(os.tmpdir(), `.claude-token-${Date.now()}`);
       debugLog('[ClaudeIntegration:invokeClaude] Writing token to temp file:', tempFile);
-      fs.writeFileSync(tempFile, `export CLAUDE_CODE_OAUTH_TOKEN="${token}"\n`, { mode: 0o600 });
+      fs.writeFileSync(tempFile, token, { mode: 0o600 });
 
-      // Clear terminal and run command without adding to shell history:
-      // - HISTFILE= disables history file writing for the current command
-      // - HISTCONTROL=ignorespace causes commands starting with space to be ignored
-      // - Leading space ensures the command is ignored even if HISTCONTROL was already set
-      // - Uses subshell (...) to isolate environment changes
-      // This prevents temp file paths from appearing in shell history
-      const command = `clear && ${cwdCommand} HISTFILE= HISTCONTROL=ignorespace bash -c 'source "${tempFile}" && rm -f "${tempFile}" && exec claude'\r`;
-      debugLog('[ClaudeIntegration:invokeClaude] Executing command (temp file method, history-safe)');
-      terminal.pty.write(command);
-      debugLog('[ClaudeIntegration:invokeClaude] ========== INVOKE CLAUDE COMPLETE (temp file) ==========');
-      return;
+      if (process.platform === 'win32') {
+        // Scope env vars to just the Claude invocation (no persistence in the parent shell).
+        // Avoid embedding the token in the command line by reading it from a temp file.
+        const escapedTempFile = escapeShellArgWindows(tempFile);
+        command =
+          `${clearCommand} && ${cwdCommand}` +
+          `setlocal & ` +
+          `set CLAUDE_CONFIG_DIR= & ` +
+          `set /p CLAUDE_CODE_OAUTH_TOKEN=<"${escapedTempFile}" & ` +
+          `del /f /q "${escapedTempFile}" & ` +
+          `claude & ` +
+          `endlocal\r`;
+      } else {
+        // Clear terminal and run command without adding to shell history:
+        // - HISTFILE= disables history file writing for the current command
+        // - HISTCONTROL=ignorespace causes commands starting with space to be ignored
+        // - Uses a subshell to isolate environment changes
+        // This prevents temp file paths from appearing in shell history.
+        command =
+          `${clearCommand} && ${cwdCommand}` +
+          `HISTFILE= HISTCONTROL=ignorespace ` +
+          `bash -c 'unset CLAUDE_CONFIG_DIR && ` +
+          `export CLAUDE_CODE_OAUTH_TOKEN="$(cat "${tempFile}")" && ` +
+          `rm -f "${tempFile}" && ` +
+          `exec claude'\r`;
+      }
+      debugLog('[ClaudeIntegration:invokeClaude] Using token override for profile');
     } else if (activeProfile.configDir) {
-      // Clear terminal and run command without adding to shell history:
-      // Same history-disabling technique as temp file method above
-      // SECURITY: Use escapeShellArg for configDir to prevent command injection
-      // Set CLAUDE_CONFIG_DIR as env var before bash -c to avoid embedding user input in the command string
-      const escapedConfigDir = escapeShellArg(activeProfile.configDir);
-      const command = `clear && ${cwdCommand}HISTFILE= HISTCONTROL=ignorespace CLAUDE_CONFIG_DIR=${escapedConfigDir} bash -c 'exec claude'\r`;
-      debugLog('[ClaudeIntegration:invokeClaude] Executing command (configDir method, history-safe)');
-      terminal.pty.write(command);
-      debugLog('[ClaudeIntegration:invokeClaude] ========== INVOKE CLAUDE COMPLETE (configDir) ==========');
-      return;
+      if (process.platform === 'win32') {
+        const escapedConfigDir = escapeShellArgWindows(activeProfile.configDir);
+        command =
+          `${clearCommand} && ${cwdCommand}` +
+          `setlocal & ` +
+          `set CLAUDE_CODE_OAUTH_TOKEN= & ` +
+          `set "CLAUDE_CONFIG_DIR=${escapedConfigDir}" & ` +
+          `claude & ` +
+          `endlocal\r`;
+      } else {
+        // SECURITY: Use escapeShellArg for configDir to prevent command injection.
+        // Set CLAUDE_CODE_OAUTH_TOKEN empty to ensure configDir takes precedence.
+        const escapedConfigDir = escapeShellArg(activeProfile.configDir);
+        command =
+          `${clearCommand} && ${cwdCommand}` +
+          `HISTFILE= HISTCONTROL=ignorespace ` +
+          `CLAUDE_CODE_OAUTH_TOKEN= ` +
+          `CLAUDE_CONFIG_DIR=${escapedConfigDir} ` +
+          `bash -c 'exec claude'\r`;
+      }
+      debugLog('[ClaudeIntegration:invokeClaude] Using configDir override for profile');
     } else {
       debugLog('[ClaudeIntegration:invokeClaude] WARNING: No token or configDir available for non-default profile');
     }
@@ -285,7 +316,6 @@ export function invokeClaude(
     debugLog('[ClaudeIntegration:invokeClaude] Using terminal environment for non-default profile:', activeProfile.name);
   }
 
-  const command = `${cwdCommand}claude\r`;
   debugLog('[ClaudeIntegration:invokeClaude] Executing command (default method):', command);
   terminal.pty.write(command);
 
@@ -321,11 +351,14 @@ export function resumeClaude(
   getWindow: WindowGetter
 ): void {
   terminal.isClaudeMode = true;
+  terminal.isCodexMode = false;
 
   let command: string;
   if (sessionId) {
     // SECURITY: Escape sessionId to prevent command injection
-    command = `claude --resume ${escapeShellArg(sessionId)}`;
+    command = process.platform === 'win32'
+      ? `claude --resume "${escapeShellArgWindows(sessionId)}"`
+      : `claude --resume ${escapeShellArg(sessionId)}`;
     terminal.claudeSessionId = sessionId;
   } else {
     command = 'claude --continue';

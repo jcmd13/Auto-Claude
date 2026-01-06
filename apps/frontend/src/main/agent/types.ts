@@ -1,5 +1,4 @@
 import { ChildProcess } from 'child_process';
-import type { IdeationConfig } from '../../shared/types';
 
 /**
  * Agent-specific types for process and state management
@@ -32,8 +31,6 @@ export interface AgentManagerEvents {
   exit: (taskId: string, code: number | null, processType: ProcessType) => void;
   'execution-progress': (taskId: string, progress: ExecutionProgressData) => void;
 }
-
-// IdeationConfig now imported from shared types to maintain consistency
 
 export interface RoadmapConfig {
   model?: string;          // Model shorthand (opus, sonnet, haiku)

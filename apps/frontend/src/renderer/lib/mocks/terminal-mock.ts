@@ -25,6 +25,10 @@ export const terminalMock = {
     console.warn('[Browser Mock] invokeClaudeInTerminal called');
   },
 
+  invokeCodexInTerminal: () => {
+    console.warn('[Browser Mock] invokeCodexInTerminal called');
+  },
+
   generateTerminalName: async () => ({
     success: true,
     data: 'Mock Terminal'
@@ -48,6 +52,10 @@ export const terminalMock = {
 
   resumeClaudeInTerminal: () => {
     console.warn('[Browser Mock] resumeClaudeInTerminal called');
+  },
+
+  resumeCodexInTerminal: () => {
+    console.warn('[Browser Mock] resumeCodexInTerminal called');
   },
 
   getTerminalSessionDates: async () => ({
