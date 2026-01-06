@@ -9,8 +9,8 @@ memory updates, recovery tracking, and Linear integration.
 import logging
 from pathlib import Path
 
-from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
+from engine import AgentEngine, EngineEventType
 from insight_extractor import extract_session_insights
 from linear_updater import (
     linear_subtask_completed,
@@ -21,7 +21,6 @@ from progress import (
     is_build_complete,
 )
 from recovery import RecoveryManager
-from security.tool_input_validator import get_safe_tool_input
 from task_logger import (
     LogEntryType,
     LogPhase,
@@ -182,9 +181,7 @@ async def post_session_processing(
                 if storage_type == "graphiti":
                     print_status("Session saved to Graphiti memory", "success")
                 else:
-                    print_status(
-                        "Session saved to file-based memory (fallback)", "info"
-                    )
+                    print_status("Session saved to file-based memory (fallback)", "info")
             else:
                 print_status("Failed to save session memory", "warning")
         except Exception as e:
@@ -193,7 +190,7 @@ async def post_session_processing(
 
         return True
 
-    elif subtask_status == "in_progress":
+    if subtask_status == "in_progress":
         # Session ended without completion
         print_status(f"Subtask {subtask_id} still in progress", "warning")
 
@@ -218,11 +215,12 @@ async def post_session_processing(
             await linear_subtask_failed(
                 spec_dir=spec_dir,
                 subtask_id=subtask_id,
-                attempt=attempt_count,
-                error_summary="Session ended without completion",
+                attempt_count=attempt_count,
+                error="Subtask still in progress",
             )
+            print_status("Linear failure recorded", "warning")
 
-        # Extract insights even from failed sessions (valuable for future attempts)
+        # Extract insights from incomplete session too
         try:
             extracted_insights = await extract_session_insights(
                 spec_dir=spec_dir,
@@ -238,7 +236,7 @@ async def post_session_processing(
             logger.debug(f"Insight extraction failed for incomplete session: {e}")
             extracted_insights = None
 
-        # Save failed session memory (to track what didn't work)
+        # Save session memory (tracks partial work, useful patterns)
         try:
             await save_session_memory(
                 spec_dir=spec_dir,
@@ -254,75 +252,73 @@ async def post_session_processing(
 
         return False
 
-    else:
-        # Subtask still pending or failed
-        print_status(
-            f"Subtask {subtask_id} not completed (status: {subtask_status})", "error"
-        )
+    # Unknown or pending status means failure
+    print_status(f"Subtask {subtask_id} not completed (status: {subtask_status})", "error")
 
-        recovery_manager.record_attempt(
+    recovery_manager.record_attempt(
+        subtask_id=subtask_id,
+        session=session_num,
+        success=False,
+        approach="Session ended without completion",
+        error=f"Subtask status: {subtask_status}",
+    )
+
+    # Record Linear session result (if enabled)
+    if linear_enabled:
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        await linear_subtask_failed(
+            spec_dir=spec_dir,
             subtask_id=subtask_id,
-            session=session_num,
-            success=False,
-            approach="Session ended without progress",
-            error=f"Subtask status is {subtask_status}",
+            attempt_count=attempt_count,
+            error=f"Subtask status: {subtask_status}",
         )
+        print_status("Linear failure recorded", "warning")
 
-        # Record Linear session result (if enabled)
-        if linear_enabled:
-            attempt_count = recovery_manager.get_attempt_count(subtask_id)
-            await linear_subtask_failed(
-                spec_dir=spec_dir,
-                subtask_id=subtask_id,
-                attempt=attempt_count,
-                error_summary=f"Subtask status: {subtask_status}",
-            )
+    # Extract insights even from completely failed sessions
+    try:
+        extracted_insights = await extract_session_insights(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=subtask_id,
+            session_num=session_num,
+            commit_before=commit_before,
+            commit_after=commit_after,
+            success=False,
+            recovery_manager=recovery_manager,
+        )
+    except Exception as e:
+        logger.debug(f"Insight extraction failed for failed session: {e}")
+        extracted_insights = None
 
-        # Extract insights even from completely failed sessions
-        try:
-            extracted_insights = await extract_session_insights(
-                spec_dir=spec_dir,
-                project_dir=project_dir,
-                subtask_id=subtask_id,
-                session_num=session_num,
-                commit_before=commit_before,
-                commit_after=commit_after,
-                success=False,
-                recovery_manager=recovery_manager,
-            )
-        except Exception as e:
-            logger.debug(f"Insight extraction failed for failed session: {e}")
-            extracted_insights = None
+    # Save failed session memory (to track what didn't work)
+    try:
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=subtask_id,
+            session_num=session_num,
+            success=False,
+            subtasks_completed=[],
+            discoveries=extracted_insights,
+        )
+    except Exception as e:
+        logger.debug(f"Failed to save failed session memory: {e}")
 
-        # Save failed session memory (to track what didn't work)
-        try:
-            await save_session_memory(
-                spec_dir=spec_dir,
-                project_dir=project_dir,
-                subtask_id=subtask_id,
-                session_num=session_num,
-                success=False,
-                subtasks_completed=[],
-                discoveries=extracted_insights,
-            )
-        except Exception as e:
-            logger.debug(f"Failed to save failed session memory: {e}")
-
-        return False
+    return False
 
 
 async def run_agent_session(
-    client: ClaudeSDKClient,
+    engine: AgentEngine,
     message: str,
     spec_dir: Path,
     verbose: bool = False,
     phase: LogPhase = LogPhase.CODING,
 ) -> tuple[str, str]:
     """
-    Run a single agent session using Claude Agent SDK.
+    Run a single agent session using an agent engine.
 
     Args:
-        client: Claude SDK client
+        engine: Agent engine instance
         message: The prompt to send
         spec_dir: Spec directory path
         verbose: Whether to show detailed output
@@ -343,7 +339,7 @@ async def run_agent_session(
         prompt_length=len(message),
         prompt_preview=message[:200] + "..." if len(message) > 200 else message,
     )
-    print("Sending prompt to Claude Agent SDK...\n")
+    print("Sending prompt to agent...\n")
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
@@ -352,170 +348,113 @@ async def run_agent_session(
     tool_count = 0
 
     try:
-        # Send the query
-        debug("session", "Sending query to Claude SDK...")
-        await client.query(message)
-        debug_success("session", "Query sent successfully")
-
-        # Collect response text and show tool use
         response_text = ""
         debug("session", "Starting to receive response stream...")
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
+        async for event in engine.stream(message):
             message_count += 1
-            debug_detailed(
-                "session",
-                f"Received message #{message_count}",
-                msg_type=msg_type,
-            )
 
-            # Handle AssistantMessage (text and tool use)
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+            if event.type == EngineEventType.TEXT and event.text is not None:
+                response_text += event.text
+                print(event.text, end="", flush=True)
+                if task_logger and event.text.strip():
+                    task_logger.log(
+                        event.text,
+                        LogEntryType.TEXT,
+                        phase,
+                        print_to_console=False,
+                    )
 
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        print(block.text, end="", flush=True)
-                        # Log text to task logger (persist without double-printing)
-                        if task_logger and block.text.strip():
-                            task_logger.log(
-                                block.text,
-                                LogEntryType.TEXT,
-                                phase,
-                                print_to_console=False,
-                            )
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        tool_name = block.name
-                        tool_input_display = None
-                        tool_count += 1
+            elif event.type == EngineEventType.TOOL_START and event.tool_name:
+                tool_count += 1
+                tool_name = event.tool_name
+                tool_input = event.tool_input_display
+                tool_input_raw = event.tool_input_raw
 
-                        # Safely extract tool input (handles None, non-dict, etc.)
-                        inp = get_safe_tool_input(block)
+                debug(
+                    "session",
+                    f"Tool call #{tool_count}: {tool_name}",
+                    tool_input=tool_input,
+                    full_input=str(tool_input_raw)[:500] if tool_input_raw else None,
+                )
 
-                        # Extract meaningful tool input for display
-                        if inp:
-                            if "pattern" in inp:
-                                tool_input_display = f"pattern: {inp['pattern']}"
-                            elif "file_path" in inp:
-                                fp = inp["file_path"]
-                                if len(fp) > 50:
-                                    fp = "..." + fp[-47:]
-                                tool_input_display = fp
-                            elif "command" in inp:
-                                cmd = inp["command"]
-                                if len(cmd) > 50:
-                                    cmd = cmd[:47] + "..."
-                                tool_input_display = cmd
-                            elif "path" in inp:
-                                tool_input_display = inp["path"]
+                if task_logger:
+                    task_logger.tool_start(
+                        tool_name, tool_input, phase, print_to_console=True
+                    )
+                else:
+                    print(f"\n[Tool: {tool_name}]", flush=True)
 
-                        debug(
-                            "session",
-                            f"Tool call #{tool_count}: {tool_name}",
-                            tool_input=tool_input_display,
-                            full_input=str(inp)[:500] if inp else None,
+                if verbose and tool_input_raw is not None:
+                    input_str = str(tool_input_raw)
+                    if len(input_str) > 300:
+                        print(f"   Input: {input_str[:300]}...", flush=True)
+                    else:
+                        print(f"   Input: {input_str}", flush=True)
+                current_tool = tool_name
+
+            elif event.type == EngineEventType.TOOL_END:
+                tool_name = event.tool_name or current_tool
+                result_content = event.tool_output
+                is_error = bool(event.is_error)
+
+                # Check if command was blocked by security hook
+                if "blocked" in str(result_content).lower():
+                    debug_error(
+                        "session",
+                        f"Tool BLOCKED: {tool_name}",
+                        result=str(result_content)[:300],
+                    )
+                    print(f"   [BLOCKED] {result_content}", flush=True)
+                    if task_logger and tool_name:
+                        task_logger.tool_end(
+                            tool_name,
+                            success=False,
+                            result="BLOCKED",
+                            detail=str(result_content),
+                            phase=phase,
+                        )
+                elif is_error:
+                    error_str = str(result_content)[:500]
+                    debug_error(
+                        "session",
+                        f"Tool error: {tool_name}",
+                        error=error_str[:200],
+                    )
+                    print(f"   [Error] {error_str}", flush=True)
+                    if task_logger and tool_name:
+                        task_logger.tool_end(
+                            tool_name,
+                            success=False,
+                            result=error_str[:100],
+                            detail=str(result_content),
+                            phase=phase,
+                        )
+                else:
+                    debug_detailed(
+                        "session",
+                        f"Tool success: {tool_name}",
+                        result_length=len(str(result_content)),
+                    )
+                    if verbose:
+                        result_str = str(result_content)[:200]
+                        print(f"   [Done] {result_str}", flush=True)
+                    else:
+                        print("   [Done]", flush=True)
+
+                    if task_logger and tool_name:
+                        detail_content = None
+                        if tool_name in ("Read", "Grep", "Bash", "Edit", "Write"):
+                            result_str = str(result_content)
+                            if len(result_str) < 50000:
+                                detail_content = result_str
+                        task_logger.tool_end(
+                            tool_name,
+                            success=True,
+                            detail=detail_content,
+                            phase=phase,
                         )
 
-                        # Log tool start (handles printing too)
-                        if task_logger:
-                            task_logger.tool_start(
-                                tool_name,
-                                tool_input_display,
-                                phase,
-                                print_to_console=True,
-                            )
-                        else:
-                            print(f"\n[Tool: {tool_name}]", flush=True)
-
-                        if verbose and hasattr(block, "input"):
-                            input_str = str(block.input)
-                            if len(input_str) > 300:
-                                print(f"   Input: {input_str[:300]}...", flush=True)
-                            else:
-                                print(f"   Input: {input_str}", flush=True)
-                        current_tool = tool_name
-
-            # Handle UserMessage (tool results)
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "ToolResultBlock":
-                        result_content = getattr(block, "content", "")
-                        is_error = getattr(block, "is_error", False)
-
-                        # Check if command was blocked by security hook
-                        if "blocked" in str(result_content).lower():
-                            debug_error(
-                                "session",
-                                f"Tool BLOCKED: {current_tool}",
-                                result=str(result_content)[:300],
-                            )
-                            print(f"   [BLOCKED] {result_content}", flush=True)
-                            if task_logger and current_tool:
-                                task_logger.tool_end(
-                                    current_tool,
-                                    success=False,
-                                    result="BLOCKED",
-                                    detail=str(result_content),
-                                    phase=phase,
-                                )
-                        elif is_error:
-                            # Show errors (truncated)
-                            error_str = str(result_content)[:500]
-                            debug_error(
-                                "session",
-                                f"Tool error: {current_tool}",
-                                error=error_str[:200],
-                            )
-                            print(f"   [Error] {error_str}", flush=True)
-                            if task_logger and current_tool:
-                                # Store full error in detail for expandable view
-                                task_logger.tool_end(
-                                    current_tool,
-                                    success=False,
-                                    result=error_str[:100],
-                                    detail=str(result_content),
-                                    phase=phase,
-                                )
-                        else:
-                            # Tool succeeded
-                            debug_detailed(
-                                "session",
-                                f"Tool success: {current_tool}",
-                                result_length=len(str(result_content)),
-                            )
-                            if verbose:
-                                result_str = str(result_content)[:200]
-                                print(f"   [Done] {result_str}", flush=True)
-                            else:
-                                print("   [Done]", flush=True)
-                            if task_logger and current_tool:
-                                # Store full result in detail for expandable view (only for certain tools)
-                                # Skip storing for very large outputs like Glob results
-                                detail_content = None
-                                if current_tool in (
-                                    "Read",
-                                    "Grep",
-                                    "Bash",
-                                    "Edit",
-                                    "Write",
-                                ):
-                                    result_str = str(result_content)
-                                    # Only store if not too large (detail truncation happens in logger)
-                                    if (
-                                        len(result_str) < 50000
-                                    ):  # 50KB max before truncation
-                                        detail_content = result_str
-                                task_logger.tool_end(
-                                    current_tool,
-                                    success=True,
-                                    detail=detail_content,
-                                    phase=phase,
-                                )
-
-                        current_tool = None
+                current_tool = None
 
         print("\n" + "-" * 70 + "\n")
 

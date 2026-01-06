@@ -53,31 +53,39 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # List all specs
-  python auto-claude/run.py --list
+  python apps/backend/run.py --list
 
   # Run a specific spec (by number or full name)
-  python auto-claude/run.py --spec 001
-  python auto-claude/run.py --spec 001-initial-app
+  python apps/backend/run.py --spec 001
+  python apps/backend/run.py --spec 001-initial-app
 
   # Workspace management (after build completes)
-  python auto-claude/run.py --spec 001 --merge     # Add build to your project
-  python auto-claude/run.py --spec 001 --review    # See what was built
-  python auto-claude/run.py --spec 001 --discard   # Delete build (with confirmation)
+  python apps/backend/run.py --spec 001 --merge     # Add build to your project
+  python apps/backend/run.py --spec 001 --review    # See what was built
+  python apps/backend/run.py --spec 001 --discard   # Delete build (with confirmation)
 
   # Advanced options
-  python auto-claude/run.py --spec 001 --direct       # Skip workspace isolation
-  python auto-claude/run.py --spec 001 --isolated     # Force workspace isolation
+  python apps/backend/run.py --spec 001 --direct       # Skip workspace isolation
+  python apps/backend/run.py --spec 001 --isolated     # Force workspace isolation
 
   # Status checks
-  python auto-claude/run.py --spec 001 --review-status  # Check human review status
-  python auto-claude/run.py --spec 001 --qa-status      # Check QA validation status
+  python apps/backend/run.py --spec 001 --review-status  # Check human review status
+  python apps/backend/run.py --spec 001 --qa-status      # Check QA validation status
 
 Prerequisites:
-  1. Create a spec first: claude /spec
-  2. Run 'claude setup-token' and set CLAUDE_CODE_OAUTH_TOKEN
+  Claude engine (default):
+    1. Create a spec first: claude /spec
+    2. Run 'claude setup-token' and set CLAUDE_CODE_OAUTH_TOKEN
+
+  Codex engine:
+    1. Create a spec first: claude /spec (spec creation still uses the Auto-Claude prompts)
+    2. Install Codex CLI and authenticate: codex login (Sign in with ChatGPT)
 
 Environment Variables:
-  CLAUDE_CODE_OAUTH_TOKEN  Your Claude Code OAuth token (required)
+  AUTO_CLAUDE_ENGINE       Select engine runtime: 'claude' or 'codex' (optional)
+  AUTO_CLAUDE_CODEX_APPROVAL_POLICY  Codex CLI approvals: untrusted|on-failure|on-request|never (optional)
+  AUTO_CLAUDE_CODEX_SANDBOX_MODE     Codex CLI sandbox: read-only|workspace-write|danger-full-access (optional)
+  CLAUDE_CODE_OAUTH_TOKEN  Your Claude Code OAuth token (Claude engine only)
                            Get it by running: claude setup-token
   AUTO_BUILD_MODEL         Override default model (optional)
         """,
@@ -114,7 +122,32 @@ Environment Variables:
         "--model",
         type=str,
         default=None,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Model to use (engine-specific) (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--engine",
+        type=str,
+        choices=["claude", "codex"],
+        default=None,
+        help=(
+            "Agent engine runtime (default: AUTO_CLAUDE_ENGINE env var, otherwise 'claude')"
+        ),
+    )
+
+    parser.add_argument(
+        "--install-codex-execpolicy",
+        action="store_true",
+        help=(
+            "Generate and install Codex execpolicy rules from this project's "
+            "security profile (writes to ~/.codex/rules/auto-claude.rules by default)"
+        ),
+    )
+    parser.add_argument(
+        "--codex-execpolicy-path",
+        type=Path,
+        default=None,
+        help="Custom path for generated Codex execpolicy rules file",
     )
 
     parser.add_argument(
@@ -266,6 +299,10 @@ def main() -> None:
     # Parse arguments
     args = parse_args()
 
+    # Select engine runtime for this invocation (used by engine factory).
+    if args.engine:
+        os.environ["AUTO_CLAUDE_ENGINE"] = args.engine
+
     # Import debug functions after environment setup
     from debug import debug, debug_error, debug_section, debug_success
 
@@ -309,13 +346,30 @@ def main() -> None:
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
         return
 
+    # Generate Codex execpolicy rules (does not require --spec)
+    if args.install_codex_execpolicy:
+        from security.codex_execpolicy import write_rules_file
+        from security.profile import get_security_profile
+
+        profile = get_security_profile(project_dir)
+        rules_path = write_rules_file(
+            profile,
+            path=args.codex_execpolicy_path,
+            project_dir=project_dir,
+        )
+        print(f"{icon(Icons.SUCCESS)} Wrote Codex execpolicy rules: {rules_path}")
+        # If no other action was requested, stop here.
+        # If a spec command is also provided, continue into the normal flow.
+        if not args.spec:
+            return
+
     # Require --spec if not listing
     if not args.spec:
         print_banner()
         print("\nError: --spec is required")
         print("\nUsage:")
-        print("  python auto-claude/run.py --list           # See all specs")
-        print("  python auto-claude/run.py --spec 001       # Run a spec")
+        print("  python apps/backend/run.py --list           # See all specs")
+        print("  python apps/backend/run.py --spec 001       # Run a spec")
         print("\nCreate a new spec with:")
         print("  claude /spec")
         sys.exit(1)

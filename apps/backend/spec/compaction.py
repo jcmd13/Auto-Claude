@@ -33,6 +33,14 @@ async def summarize_phase_output(
     Returns:
         Concise summary of key findings, decisions, and insights from the phase
     """
+    try:
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    except ImportError as exc:  # pragma: no cover
+        fallback = phase_output[:2000]
+        if len(phase_output) > 2000:
+            fallback += "\n\n[... truncated ...]"
+        return f"[Summarization skipped: claude_agent_sdk not installed ({exc})]\n\n{fallback}"
+
     # Validate auth token
     require_auth_token()
 

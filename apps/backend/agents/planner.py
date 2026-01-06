@@ -8,7 +8,7 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 import logging
 from pathlib import Path
 
-from core.client import create_client
+from engine import EngineRunOptions, create_engine
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from task_logger import (
@@ -95,11 +95,14 @@ async def run_followup_planner(
     # Respects task_metadata.json configuration when no CLI override
     planning_model = get_phase_model(spec_dir, "planning", model)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
-    client = create_client(
-        project_dir,
-        spec_dir,
-        planning_model,
-        max_thinking_tokens=planning_thinking_budget,
+    engine = create_engine(
+        EngineRunOptions(
+            cwd=project_dir,
+            spec_dir=spec_dir,
+            model=planning_model,
+            agent_type="planner",
+            max_thinking_tokens=planning_thinking_budget,
+        )
     )
 
     # Generate follow-up planner prompt
@@ -110,10 +113,9 @@ async def run_followup_planner(
 
     try:
         # Run single planning session
-        async with client:
-            status, response = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
-            )
+        status, response = await run_agent_session(
+            engine, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
+        )
 
         # End planning phase in task logger
         if task_logger:
@@ -151,7 +153,7 @@ async def run_followup_planner(
                     f"Total subtasks: {len(all_subtasks)}",
                     "",
                     muted("Next steps:"),
-                    f"  Run: {highlight(f'python auto-claude/run.py --spec {spec_dir.name}')}",
+                    f"  Run: {highlight(f'python apps/backend/run.py --spec {spec_dir.name}')}",
                 ]
                 print(box(content, width=70, style="heavy"))
                 print()

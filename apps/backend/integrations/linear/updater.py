@@ -25,9 +25,10 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+if TYPE_CHECKING:
+    from claude_agent_sdk import ClaudeSDKClient
 
 # Linear status constants (matching Valma AI team setup)
 STATUS_TODO = "Todo"
@@ -108,11 +109,19 @@ def get_linear_api_key() -> str:
     return os.environ.get("LINEAR_API_KEY", "")
 
 
-def _create_linear_client() -> ClaudeSDKClient:
+def _create_linear_client() -> "ClaudeSDKClient":
     """
     Create a minimal Claude client with only Linear MCP tools.
     Used for focused mini-agent calls.
     """
+    try:
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "Linear integration requires claude_agent_sdk. "
+            "Install it with: pip install -r auto-claude/requirements.txt"
+        ) from exc
+
     from core.auth import (
         ensure_claude_code_oauth_token,
         get_sdk_env_vars,

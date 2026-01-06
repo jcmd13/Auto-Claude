@@ -116,25 +116,40 @@ def validate_environment(spec_dir: Path) -> bool:
         True if valid, False otherwise (with error messages printed)
     """
     valid = True
+    engine_name = os.environ.get("AUTO_CLAUDE_ENGINE", "claude").strip().lower()
+    print(f"Engine: {engine_name}")
 
-    # Check for OAuth token (API keys are not supported)
-    if not get_auth_token():
-        print("Error: No OAuth token found")
-        print("\nAuto Claude requires Claude Code OAuth authentication.")
-        print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
-        print("\nTo authenticate, run:")
-        print("  claude setup-token")
-        valid = False
+    if engine_name in {"codex", "codex_cli"}:
+        from core.codex_auth import get_codex_login_status, require_codex_chatgpt_login
+
+        try:
+            require_codex_chatgpt_login()
+            _, status = get_codex_login_status()
+            if status:
+                print(f"Codex auth: {status}")
+        except ValueError as e:
+            print("Error: Codex authentication required")
+            print(str(e))
+            valid = False
     else:
-        # Show which auth source is being used
-        source = get_auth_token_source()
-        if source:
-            print(f"Auth: {source}")
+        # Check for OAuth token (API keys are not supported)
+        if not get_auth_token():
+            print("Error: No OAuth token found")
+            print("\nAuto Claude requires Claude Code OAuth authentication.")
+            print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
+            print("\nTo authenticate, run:")
+            print("  claude setup-token")
+            valid = False
+        else:
+            # Show which auth source is being used
+            source = get_auth_token_source()
+            if source:
+                print(f"Auth: {source}")
 
-        # Show custom base URL if set
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
-        if base_url:
-            print(f"API Endpoint: {base_url}")
+            # Show custom base URL if set
+            base_url = os.environ.get("ANTHROPIC_BASE_URL")
+            if base_url:
+                print(f"API Endpoint: {base_url}")
 
     # Check for spec.md in spec directory
     spec_file = spec_dir / "spec.md"

@@ -56,10 +56,12 @@
 
 ## Requirements
 
-- **Claude Pro/Max subscription** - [Get one here](https://claude.ai/upgrade)
-- **Claude Code CLI** - `npm install -g @anthropic-ai/claude-code`
+- **Claude engine (default)** - [Claude Pro/Max subscription](https://claude.ai/upgrade) + Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
+- **Codex engine (optional)** - Codex CLI (`brew install --cask codex` or `npm install -g @openai/codex`) + `codex login` (Sign in with ChatGPT)
 - **Git repository** - Your project must be initialized as a git repo
 - **Python 3.12+** - Required for the backend and Memory Layer
+
+> Note: Some app features still require Claude authentication even if you use Codex for build tasks.
 
 ---
 
@@ -70,6 +72,8 @@
 3. **Connect Claude** - The app will guide you through OAuth setup
 4. **Create a task** - Describe what you want to build
 5. **Watch it work** - Agents plan, code, and validate autonomously
+
+> To use Codex for build tasks: install Codex CLI, run `codex login`, then select **Settings → Integrations → Auto-Claude Engine → Codex**. If Codex isn’t discoverable in the app, set `AUTO_CLAUDE_CODEX_PATH` to the full path of the `codex` binary.
 
 ---
 
@@ -160,7 +164,11 @@ cp apps/backend/.env.example apps/backend/.env
 |----------|----------|-------------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Yes | OAuth token from `claude setup-token` |
 | `GRAPHITI_ENABLED` | No | Enable Memory Layer for cross-session context |
+| `AUTO_CLAUDE_ENGINE` | No | Select engine runtime (`claude` or `codex`) |
 | `AUTO_BUILD_MODEL` | No | Override the default Claude model |
+| `AUTO_CLAUDE_CODEX_APPROVAL_POLICY` | No | Codex CLI approvals (`untrusted`, `on-failure`, `on-request`, `never`) (Codex only) |
+| `AUTO_CLAUDE_CODEX_SANDBOX_MODE` | No | Codex CLI sandbox (`read-only`, `workspace-write`, `danger-full-access`) (Codex only) |
+| `AUTO_CLAUDE_CODEX_PATH` | No | Full path to `codex` binary when PATH isn’t available (Codex only) |
 | `GITLAB_TOKEN` | No | GitLab Personal Access Token for GitLab integration |
 | `GITLAB_INSTANCE_URL` | No | GitLab instance URL (defaults to gitlab.com) |
 | `LINEAR_API_KEY` | No | Linear API key for task sync |

@@ -23,9 +23,10 @@ Usage:
     python auto-claude/run.py --spec 001 --discard   # Delete build (requires confirmation)
 
 Prerequisites:
-    - CLAUDE_CODE_OAUTH_TOKEN environment variable set (run: claude setup-token)
-    - Spec created via: claude /spec
-    - Claude Code CLI installed
+    - Spec created via: claude /spec (or via spec_runner.py)
+    - Engine runtime:
+        - Claude (default): Claude Code CLI + OAuth token (run: claude setup-token)
+        - Codex: Codex CLI + ChatGPT login (run: codex login)
 """
 
 import sys

@@ -9,7 +9,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from core.client import create_client
+from engine import EngineRunOptions, create_engine
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -208,7 +208,7 @@ async def run_autonomous_agent(
             print("\nTo resume, delete the PAUSE file:")
             print(f"  rm {pause_file}")
             print("\nThen run again:")
-            print(f"  python auto-claude/run.py --spec {spec_dir.name}")
+            print(f"  python apps/backend/run.py --spec {spec_dir.name}")
             return
 
         # Check max iterations
@@ -256,14 +256,14 @@ async def run_autonomous_agent(
         phase_model = get_phase_model(spec_dir, current_phase, model)
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create client (fresh context) with phase-specific model and thinking
-        # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
-            agent_type="planner" if first_run else "coder",
-            max_thinking_tokens=phase_thinking_budget,
+        engine = create_engine(
+            EngineRunOptions(
+                cwd=project_dir,
+                spec_dir=spec_dir,
+                model=phase_model,
+                agent_type="planner" if first_run else "coder",
+                max_thinking_tokens=phase_thinking_budget,
+            )
         )
 
         # Generate appropriate prompt
@@ -357,11 +357,9 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
-        # Run session with async context manager
-        async with client:
-            status, response = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=current_log_phase
-            )
+        status, response = await run_agent_session(
+            engine, prompt, spec_dir, verbose, phase=current_log_phase
+        )
 
         # === POST-SESSION PROCESSING (100% reliable) ===
         if subtask_id and not first_run:
@@ -493,7 +491,7 @@ async def run_autonomous_agent(
             bold(f"{icon(Icons.PLAY)} NEXT STEPS"),
             "",
             f"{total - completed} subtasks remaining.",
-            f"Run again: {highlight(f'python auto-claude/run.py --spec {spec_dir.name}')}",
+            f"Run again: {highlight(f'python apps/backend/run.py --spec {spec_dir.name}')}",
         ]
     else:
         content = [

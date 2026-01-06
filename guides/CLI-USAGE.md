@@ -11,7 +11,9 @@ This document covers terminal-only usage of Auto Claude. **For most users, we re
 ## Prerequisites
 
 - Python 3.9+
-- Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
+- Choose an engine runtime:
+  - **Claude (default)**: Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) + Claude subscription
+  - **Codex**: Codex CLI (`brew install --cask codex` or `npm install -g @openai/codex`) + ChatGPT login (`codex login`)
 
 ### Installing Python
 
@@ -57,12 +59,42 @@ python3 -m venv .venv && source .venv/bin/activate && pip install -r requirement
 
 ```bash
 cp .env.example .env
+```
 
+### Claude engine (default)
+
+```bash
 # Get your OAuth token
 claude setup-token
 
 # Add the token to apps/backend/.env
 # CLAUDE_CODE_OAUTH_TOKEN=your-token-here
+```
+
+### Codex engine
+
+```bash
+# Authenticate with ChatGPT (no API key required)
+codex login
+
+# Select Codex at runtime
+python run.py --engine codex --list
+```
+
+### Codex execpolicy (optional)
+
+Codex can use execpolicy rules to auto-allow common commands and prompt before risky ones.
+Auto-Claude can generate a rules file from your project's security profile:
+
+```bash
+# Writes to ~/.codex/rules/auto-claude.rules by default
+python run.py --install-codex-execpolicy
+
+# Or choose a custom output path
+python run.py --install-codex-execpolicy --codex-execpolicy-path /path/to/auto-claude.rules
+
+# Optionally install and run a spec in the same invocation
+python run.py --engine codex --install-codex-execpolicy --spec 001
 ```
 
 ## Creating Specs
@@ -108,6 +140,9 @@ python run.py --spec 001-feature-name
 
 # Limit iterations for testing
 python run.py --spec 001 --max-iterations 5
+
+# Use Codex CLI engine (requires `codex login`)
+python run.py --engine codex --spec 001
 ```
 
 ## QA Validation
@@ -184,5 +219,9 @@ python validate_spec.py --spec-dir specs/001-feature --checkpoint all
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | Yes | OAuth token from `claude setup-token` |
+| `AUTO_CLAUDE_ENGINE` | No | Select engine runtime (`claude` or `codex`) |
+| `AUTO_CLAUDE_CODEX_APPROVAL_POLICY` | No | Codex CLI approvals (`untrusted`, `on-failure`, `on-request`, `never`); default is TTY-aware (Codex only) |
+| `AUTO_CLAUDE_CODEX_SANDBOX_MODE` | No | Codex CLI sandbox (`read-only`, `workspace-write`, `danger-full-access`) (Codex only) |
+| `AUTO_CLAUDE_CODEX_PATH` | No | Full path to the `codex` binary when it isn't discoverable via PATH (Codex only) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude only | OAuth token from `claude setup-token` |
 | `AUTO_BUILD_MODEL` | No | Model override (default: claude-opus-4-5-20251101) |
