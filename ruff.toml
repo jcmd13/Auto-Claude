@@ -1,5 +1,9 @@
 # Ruff configuration for Auto Claude
 
+exclude = [
+    "tests",
+]
+
 [lint]
 # Enable common rule sets
 select = [

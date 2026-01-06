@@ -383,7 +383,7 @@ npm run test:backend -- -m "not slow"
 pytest tests/ --cov=apps/backend --cov-report=html
 ```
 
-Test configuration is in `tests/pytest.ini`.
+Test configuration is in `pytest.ini`.
 
 ### Frontend Tests
 
