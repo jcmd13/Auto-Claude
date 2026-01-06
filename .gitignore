@@ -8,9 +8,13 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Node
+package-lock.json
+
 # ===========================
 # Security - Environment & Secrets
 # ===========================
+# Environment files (contain API keys)
 .env
 .env.*
 !.env.example
@@ -51,6 +55,9 @@ lerna-debug.log*
 # ===========================
 .worktrees/
 
+# Backups
+*.backup
+
 # ===========================
 # Auto Claude Generated
 # ===========================
@@ -84,6 +91,9 @@ venv/
 ENV/
 env/
 .conda/
+
+# Ruff
+.ruff_cache/
 
 # Testing
 .pytest_cache/
