@@ -1,0 +1,70 @@
+name: Package Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/frontend/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  package-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Package (dir)
+        working-directory: apps/frontend
+        run: npm run package:mac -- --dir --publish never
+
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup MSBuild (node-gyp)
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install dependencies
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Package (dir)
+        working-directory: apps/frontend
+        run: npm run package:win -- --dir --publish never
+
+  package-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Package (dir)
+        working-directory: apps/frontend
+        run: npm run package:linux -- --dir --publish never
