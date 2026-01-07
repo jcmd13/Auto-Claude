@@ -12,6 +12,7 @@ const os = require('os');
 const isWindows = os.platform() === 'win32';
 const backendDir = path.join(__dirname, '..', 'apps', 'backend');
 const venvDir = path.join(backendDir, '.venv');
+const devRequirementsPath = path.join(backendDir, 'requirements-dev.txt');
 
 console.log('Installing Auto Claude backend dependencies...\n');
 
@@ -33,19 +34,25 @@ function findPython() {
     : ['python3.13', 'python3.12', 'python3.14', 'python3', 'python'];
 
   for (const cmd of candidates) {
+    const cmdParts = cmd.split(' ');
+    const file = cmdParts[0];
+    const args = [...cmdParts.slice(1), '--version'];
+
     try {
-      const result = spawnSync(cmd.split(' ')[0], [...cmd.split(' ').slice(1), '--version'], {
+      const result = spawnSync(file, args, {
         encoding: 'utf8',
-        shell: true,
+        shell: false,
       });
+
+      const output = (result.stdout || result.stderr || '').toString();
       // Accept Python 3.12+ using proper version parsing
       if (result.status === 0) {
-        const versionMatch = result.stdout.match(/Python (\d+)\.(\d+)/);
+        const versionMatch = output.match(/Python (\d+)\.(\d+)/);
         if (versionMatch) {
           const major = parseInt(versionMatch[1], 10);
           const minor = parseInt(versionMatch[2], 10);
           if (major === 3 && minor >= 12) {
-            console.log(`Found Python 3.12+: ${cmd} -> ${result.stdout.trim()}`);
+            console.log(`Found Python 3.12+: ${cmd} -> ${output.trim()}`);
             return cmd;
           }
         }
@@ -97,7 +104,10 @@ async function main() {
   // Install dependencies
   console.log('\nInstalling dependencies...');
   const pip = getPipPath();
-  if (!run(`"${pip}" install -r requirements.txt`)) {
+  const requirementsFile = fs.existsSync(devRequirementsPath)
+    ? 'requirements-dev.txt'
+    : 'requirements.txt';
+  if (!run(`"${pip}" install -r ${requirementsFile}`)) {
     console.error('Failed to install dependencies');
     process.exit(1);
   }

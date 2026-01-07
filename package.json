@@ -6,7 +6,7 @@
   "author": "Auto Claude Team",
   "scripts": {
     "install:backend": "node scripts/install-backend.js",
-    "install:frontend": "cd apps/frontend && npm install",
+    "install:frontend": "cd apps/frontend && npm ci",
     "install:all": "npm run install:backend && npm run install:frontend",
     "start": "cd apps/frontend && npm run build && npm run start",
     "dev": "cd apps/frontend && npm run dev",

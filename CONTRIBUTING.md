@@ -266,17 +266,26 @@ pip install pre-commit
 pre-commit install
 ```
 
-### Install Ruff Locally (Optional)
+### Install Ruff
 
-Pre-commit and CI both use a pinned Ruff version. If you want to run Ruff directly:
+Pre-commit and CI both use a pinned Ruff version. For contributors, Ruff is also installed into the backend virtualenv via `apps/backend/requirements-dev.txt` when you run `npm run install:backend` (or `npm run install:all`).
+
+Run it directly from the virtualenv:
 
 ```bash
-# In your backend virtualenv
-pip install ruff==0.14.10
+# macOS/Linux
+apps/backend/.venv/bin/ruff check apps/backend
+apps/backend/.venv/bin/ruff format apps/backend --check --diff
 
-# From repo root
-ruff check apps/backend
-ruff format apps/backend --check --diff
+# Windows (PowerShell)
+.\apps\backend\.venv\Scripts\ruff.exe check apps\backend
+.\apps\backend\.venv\Scripts\ruff.exe format apps\backend --check --diff
+```
+
+If you prefer a standalone install (outside the venv), use:
+
+```bash
+pip install ruff==0.14.10
 ```
 
 ### What Runs on Commit
