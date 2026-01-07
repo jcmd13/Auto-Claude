@@ -42,14 +42,14 @@ jobs:
         shell: pwsh
         run: |
           # Install only node-pty
-          npm install node-pty@1.1.0-beta42
+          npm install @lydell/node-pty@1.1.0
 
           # Get Electron ABI version
           $electronAbi = (npx electron-abi $env:ELECTRON_VERSION)
           Write-Host "Building for Electron $env:ELECTRON_VERSION (ABI: $electronAbi)"
 
           # Rebuild node-pty for Electron
-          npx @electron/rebuild --version $env:ELECTRON_VERSION --module-dir node_modules/node-pty --arch ${{ matrix.arch }}
+          npx @electron/rebuild --version $env:ELECTRON_VERSION --module-dir node_modules/@lydell/node-pty --arch ${{ matrix.arch }}
 
       - name: Package prebuilt binaries
         working-directory: apps/frontend
@@ -61,7 +61,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $prebuildDir
 
           # Copy all built native files
-          $buildDir = "node_modules/node-pty/build/Release"
+          $buildDir = "node_modules/@lydell/node-pty/build/Release"
           if (Test-Path $buildDir) {
             Copy-Item "$buildDir/*.node" $prebuildDir/ -Force
             Copy-Item "$buildDir/*.dll" $prebuildDir/ -Force -ErrorAction SilentlyContinue

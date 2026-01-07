@@ -46,14 +46,16 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
-*.backup
 .cache/
 
-# Package manager locks (pnpm is primary)
-package-lock.json
+# Package manager locks - using npm only
 yarn.lock
+pnpm-lock.yaml
 bun.lock
 bun.lockb
+
+# Backup files
+*.backup
 
 # Test files in root
 test-*.js

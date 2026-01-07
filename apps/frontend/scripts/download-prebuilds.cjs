@@ -190,7 +190,7 @@ async function downloadPrebuilds() {
   // Download the prebuild
   const tempDir = path.join(__dirname, '..', '.prebuild-temp');
   const zipPath = path.join(tempDir, asset.name);
-  const nodePtyDir = path.join(__dirname, '..', 'node_modules', 'node-pty');
+  const nodePtyDir = path.join(__dirname, '..', 'node_modules', '@lydell', 'node-pty');
   const buildDir = path.join(nodePtyDir, 'build', 'Release');
 
   try {
@@ -213,7 +213,7 @@ async function downloadPrebuilds() {
     // Ensure build/Release directory exists
     fs.mkdirSync(buildDir, { recursive: true });
 
-    // Copy files to node_modules/node-pty/build/Release
+    // Copy files to node_modules/@lydell/node-pty/build/Release
     const files = fs.readdirSync(extractedDir);
     for (const file of files) {
       const src = path.join(extractedDir, file);

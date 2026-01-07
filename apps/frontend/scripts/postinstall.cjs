@@ -37,7 +37,7 @@ To install:
   3. In "Individual Components", also select:
      - "MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs"
 
-  4. Restart your terminal and run: pnpm install
+  4. Restart your terminal and run: npm install
 
 ================================================================================
 `;
@@ -70,7 +70,7 @@ function runElectronRebuild() {
  * Check if node-pty is already built
  */
 function isNodePtyBuilt() {
-  const buildDir = path.join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release');
+  const buildDir = path.join(__dirname, '..', 'node_modules', '@lydell', 'node-pty', 'build', 'Release');
   if (!fs.existsSync(buildDir)) return false;
 
   // Check for the main .node file
