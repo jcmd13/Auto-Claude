@@ -266,6 +266,19 @@ pip install pre-commit
 pre-commit install
 ```
 
+### Install Ruff Locally (Optional)
+
+Pre-commit and CI both use a pinned Ruff version. If you want to run Ruff directly:
+
+```bash
+# In your backend virtualenv
+pip install ruff==0.14.10
+
+# From repo root
+ruff check apps/backend
+ruff format apps/backend --check --diff
+```
+
 ### What Runs on Commit
 
 When you commit, the following checks run automatically:

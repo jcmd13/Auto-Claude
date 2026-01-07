@@ -268,7 +268,9 @@ class CodexCliEngine(AgentEngine):
 
         try:
             if self.options.timeout_seconds:
-                await asyncio.wait_for(proc.wait(), timeout=self.options.timeout_seconds)
+                await asyncio.wait_for(
+                    proc.wait(), timeout=self.options.timeout_seconds
+                )
             else:
                 await proc.wait()
         finally:

@@ -181,7 +181,9 @@ async def post_session_processing(
                 if storage_type == "graphiti":
                     print_status("Session saved to Graphiti memory", "success")
                 else:
-                    print_status("Session saved to file-based memory (fallback)", "info")
+                    print_status(
+                        "Session saved to file-based memory (fallback)", "info"
+                    )
             else:
                 print_status("Failed to save session memory", "warning")
         except Exception as e:
@@ -253,7 +255,9 @@ async def post_session_processing(
         return False
 
     # Unknown or pending status means failure
-    print_status(f"Subtask {subtask_id} not completed (status: {subtask_status})", "error")
+    print_status(
+        f"Subtask {subtask_id} not completed (status: {subtask_status})", "error"
+    )
 
     recovery_manager.record_attempt(
         subtask_id=subtask_id,
