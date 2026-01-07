@@ -62,6 +62,7 @@ if (isBetaVersion()) {
  * Get system information for debug reports
  */
 export function getSystemInfo(): Record<string, string> {
+  const cpuCores = Math.max(os.cpus().length, 1);
   return {
     appVersion: app.getVersion(),
     electronVersion: process.versions.electron,
@@ -73,7 +74,7 @@ export function getSystemInfo(): Record<string, string> {
     osType: os.type(),
     totalMemory: `${Math.round(os.totalmem() / (1024 * 1024 * 1024))}GB`,
     freeMemory: `${Math.round(os.freemem() / (1024 * 1024 * 1024))}GB`,
-    cpuCores: os.cpus().length.toString(),
+    cpuCores: cpuCores.toString(),
     locale: app.getLocale(),
     isPackaged: app.isPackaged.toString(),
     userData: app.getPath('userData'),

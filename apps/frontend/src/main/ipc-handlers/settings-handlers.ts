@@ -509,7 +509,8 @@ export function registerSettingsHandlers(
         }
 
         const resolvedPath = path.resolve(itemPath);
-        return shell.showItemInFolder(resolvedPath);
+        shell.showItemInFolder(resolvedPath);
+        return true;
       } catch (error) {
         console.warn('[SHELL_SHOW_ITEM_IN_FOLDER] Failed to show item:', error);
         return false;

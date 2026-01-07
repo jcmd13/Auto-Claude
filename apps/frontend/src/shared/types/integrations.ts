@@ -105,6 +105,14 @@ export interface GitHubIssue {
   repoFullName: string;
 }
 
+export interface GitHubIssueComment {
+  id: number;
+  body: string;
+  user: { login: string; avatar_url?: string };
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GitHubSyncStatus {
   connected: boolean;
   repoFullName?: string;

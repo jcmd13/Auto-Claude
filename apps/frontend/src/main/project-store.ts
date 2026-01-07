@@ -418,7 +418,9 @@ export class ProjectStore {
         }
 
         // Determine task status and review reason from plan
-        const worktreeSpecPath = path.join(project.path, '.worktrees', dir.name, specsBaseDir, dir.name);
+        const worktreeSpecPath = location === 'main'
+          ? path.join(basePath, '.worktrees', dir.name, specsBaseDir, dir.name)
+          : undefined;
         const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata, worktreeSpecPath);
 
         // Extract subtasks from plan (handle both 'subtasks' and 'chunks' naming)
