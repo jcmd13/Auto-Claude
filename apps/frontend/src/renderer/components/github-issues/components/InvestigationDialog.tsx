@@ -12,16 +12,9 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../ui/dialog';
+import type { GitHubIssueComment, IPCResult } from '../../../../shared/types';
 import type { InvestigationDialogProps } from '../types';
 import { formatDate } from '../utils';
-
-interface GitHubComment {
-  id: number;
-  body: string;
-  user: { login: string; avatar_url?: string };
-  created_at: string;
-  updated_at: string;
-}
 
 export function InvestigationDialog({
   open,
@@ -32,7 +25,7 @@ export function InvestigationDialog({
   onClose,
   projectId
 }: InvestigationDialogProps) {
-  const [comments, setComments] = useState<GitHubComment[]>([]);
+  const [comments, setComments] = useState<GitHubIssueComment[]>([]);
   const [selectedCommentIds, setSelectedCommentIds] = useState<number[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [fetchCommentsError, setFetchCommentsError] = useState<string | null>(null);
@@ -48,12 +41,12 @@ export function InvestigationDialog({
       setFetchCommentsError(null);
 
       window.electronAPI.getIssueComments(projectId, selectedIssue.number)
-        .then((result: { success: boolean; data?: GitHubComment[] }) => {
+        .then((result: IPCResult<GitHubIssueComment[]>) => {
           if (!isMounted) return;
           if (result.success && result.data) {
             setComments(result.data);
             // By default, select all comments
-            setSelectedCommentIds(result.data.map((c: GitHubComment) => c.id));
+            setSelectedCommentIds(result.data.map((c) => c.id));
           }
         })
         .catch((err: unknown) => {
@@ -159,9 +152,9 @@ export function InvestigationDialog({
                         />
                         <div className="flex-1 space-y-1 min-w-0">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-medium">{comment.user.login}</span>
+                            <span className="font-medium">{comment.author.login}</span>
                             <span>•</span>
-                            <span>{formatDate(comment.created_at)}</span>
+                            <span>{formatDate(comment.createdAt)}</span>
                           </div>
                           <p className="text-sm text-foreground whitespace-pre-wrap break-words line-clamp-3">
                             {comment.body}

@@ -108,9 +108,9 @@ export interface GitHubIssue {
 export interface GitHubIssueComment {
   id: number;
   body: string;
-  user: { login: string; avatar_url?: string };
-  created_at: string;
-  updated_at: string;
+  author: { login: string; avatarUrl?: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GitHubSyncStatus {

@@ -4,7 +4,7 @@
 
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/constants';
-import type { IPCResult, GitHubIssue } from '../../../shared/types';
+import type { IPCResult, GitHubIssue, GitHubIssueComment } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getGitHubConfig, githubFetch, normalizeRepoReference } from './utils';
 import type { GitHubAPIIssue, GitHubAPIComment } from './types';
@@ -36,6 +36,19 @@ function transformIssue(issue: GitHubAPIIssue, repoFullName: string): GitHubIssu
     url: issue.url,
     htmlUrl: issue.html_url,
     repoFullName
+  };
+}
+
+function transformComment(comment: GitHubAPIComment): GitHubIssueComment {
+  return {
+    id: comment.id,
+    body: comment.body,
+    author: {
+      login: comment.user.login,
+      avatarUrl: comment.user.avatar_url
+    },
+    createdAt: comment.created_at,
+    updatedAt: comment.updated_at
   };
 }
 
@@ -146,7 +159,7 @@ export function registerGetIssue(): void {
 export function registerGetIssueComments(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_GET_ISSUE_COMMENTS,
-    async (_, projectId: string, issueNumber: number): Promise<IPCResult<GitHubAPIComment[]>> => {
+    async (_, projectId: string, issueNumber: number): Promise<IPCResult<GitHubIssueComment[]>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
         return { success: false, error: 'Project not found' };
@@ -171,7 +184,7 @@ export function registerGetIssueComments(): void {
           `/repos/${normalizedRepo}/issues/${issueNumber}/comments`
         ) as GitHubAPIComment[];
 
-        return { success: true, data: comments };
+        return { success: true, data: comments.map(transformComment) };
       } catch (error) {
         return {
           success: false,
