@@ -27,6 +27,7 @@ export class InsightsService extends EventEmitter {
   private storage: SessionStorage;
   private sessionManager: SessionManager;
   private executor: InsightsExecutor;
+  private activeSessionIds: Map<string, string> = new Map();
 
   constructor() {
     super();
@@ -110,6 +111,27 @@ export class InsightsService extends EventEmitter {
   }
 
   /**
+   * Check if a session is currently active
+   */
+  isSessionActive(projectId: string): boolean {
+    return this.executor.isSessionActive(projectId);
+  }
+
+  /**
+   * Get the active session ID for a project
+   */
+  getActiveSessionId(projectId: string): string | null {
+    return this.activeSessionIds.get(projectId) || null;
+  }
+
+  /**
+   * Get all active session IDs
+   */
+  getActiveSessionIds(): string[] {
+    return Array.from(this.activeSessionIds.values());
+  }
+
+  /**
    * Send a message and get AI response
    */
   async sendMessage(
@@ -120,6 +142,7 @@ export class InsightsService extends EventEmitter {
   ): Promise<void> {
     // Cancel any existing session
     this.executor.cancelSession(projectId);
+    this.activeSessionIds.delete(projectId);
 
     // Validate auto-claude source
     const autoBuildSource = this.config.getAutoBuildSourcePath();
@@ -158,11 +181,14 @@ export class InsightsService extends EventEmitter {
 
     // Use provided modelConfig or fall back to session's config
     const configToUse = modelConfig || session.modelConfig;
+    const sessionId = session.id;
 
     try {
+      this.activeSessionIds.set(projectId, sessionId);
       // Execute insights query
       const result = await this.executor.execute(
         projectId,
+        sessionId,
         projectPath,
         message,
         conversationHistory,
@@ -185,6 +211,10 @@ export class InsightsService extends EventEmitter {
     } catch (error) {
       // Error already emitted by executor
       console.error('[InsightsService] Error executing insights:', error);
+    } finally {
+      if (this.activeSessionIds.get(projectId) === sessionId) {
+        this.activeSessionIds.delete(projectId);
+      }
     }
   }
 

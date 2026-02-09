@@ -291,6 +291,31 @@ async def run_autonomous_agent(
             if task_logger:
                 task_logger.set_session(iteration)
         else:
+            # CRITICAL: Validate that planner created subtasks
+            # If we just finished planning (is_planning_phase=True) but have no subtasks,
+            # the planner failed - emit error and return instead of silently breaking
+            if is_planning_phase:
+                next_check = get_next_subtask(spec_dir)
+                if not next_check:
+                    emit_phase(ExecutionPhase.FAILED, "Planner failed to create implementation plan with subtasks")
+                    print_status("ERROR: Planner session completed but no subtasks were created!", "error")
+                    print(muted("The planner agent did not write a valid implementation_plan.json with subtasks."))
+                    print(muted("This can happen when:"))
+                    print(muted("  - The AI engine didn't execute the Write tool"))
+                    print(muted("  - The plan JSON was malformed"))
+                    print(muted("  - The session was interrupted"))
+                    print()
+                    print(muted(f"Check the spec directory: {spec_dir}"))
+                    status_manager.update(state=BuildState.ERROR)
+
+                    if task_logger:
+                        task_logger.end_phase(
+                            LogPhase.PLANNING,
+                            success=False,
+                            message="Planner failed to create subtasks",
+                        )
+                    return
+
             # Switch to coding phase after planning
             if is_planning_phase:
                 is_planning_phase = False

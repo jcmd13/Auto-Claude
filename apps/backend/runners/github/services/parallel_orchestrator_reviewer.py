@@ -20,9 +20,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import shutil
-import subprocess
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +29,10 @@ try:
     from ...core.client import create_client
     from ...phase_config import get_thinking_budget
     from ..context_gatherer import PRContext, _validate_git_ref
+    from ..gh_client import GHClient
     from ..models import (
+        BRANCH_BEHIND_BLOCKER_MSG,
+        BRANCH_BEHIND_REASONING,
         GitHubRunnerConfig,
         MergeVerdict,
         PRReviewFinding,
@@ -40,12 +40,17 @@ try:
         ReviewSeverity,
     )
     from .category_utils import map_category
+    from .io_utils import safe_print
+    from .pr_worktree_manager import PRWorktreeManager
     from .pydantic_models import ParallelOrchestratorResponse
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
     from context_gatherer import PRContext, _validate_git_ref
     from core.client import create_client
+    from gh_client import GHClient
     from models import (
+        BRANCH_BEHIND_BLOCKER_MSG,
+        BRANCH_BEHIND_REASONING,
         GitHubRunnerConfig,
         MergeVerdict,
         PRReviewFinding,
@@ -54,6 +59,8 @@ except (ImportError, ValueError, SystemError):
     )
     from phase_config import get_thinking_budget
     from services.category_utils import map_category
+    from services.io_utils import safe_print
+    from services.pr_worktree_manager import PRWorktreeManager
     from services.pydantic_models import ParallelOrchestratorResponse
     from services.sdk_utils import process_sdk_stream
 
@@ -92,6 +99,7 @@ class ParallelOrchestratorReviewer:
         self.github_dir = Path(github_dir)
         self.config = config
         self.progress_callback = progress_callback
+        self.worktree_manager = PRWorktreeManager(project_dir, PR_WORKTREE_DIR)
 
     def _report_progress(self, phase: str, progress: int, message: str, **kwargs):
         """Report progress if callback is set."""
@@ -143,78 +151,7 @@ class ParallelOrchestratorReviewer:
                 "Must contain only alphanumeric characters, dots, slashes, underscores, and hyphens."
             )
 
-        worktree_name = f"pr-{pr_number}-{uuid.uuid4().hex[:8]}"
-        worktree_dir = self.project_dir / PR_WORKTREE_DIR
-
-        if DEBUG_MODE:
-            print(f"[PRReview] DEBUG: project_dir={self.project_dir}", flush=True)
-            print(f"[PRReview] DEBUG: worktree_dir={worktree_dir}", flush=True)
-            print(f"[PRReview] DEBUG: head_sha={head_sha}", flush=True)
-
-        worktree_dir.mkdir(parents=True, exist_ok=True)
-        worktree_path = worktree_dir / worktree_name
-
-        if DEBUG_MODE:
-            print(f"[PRReview] DEBUG: worktree_path={worktree_path}", flush=True)
-            print(
-                f"[PRReview] DEBUG: worktree_dir exists={worktree_dir.exists()}",
-                flush=True,
-            )
-
-        # Fetch the commit if not available locally (handles fork PRs)
-        fetch_result = subprocess.run(
-            ["git", "fetch", "origin", head_sha],
-            cwd=self.project_dir,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: fetch returncode={fetch_result.returncode}",
-                flush=True,
-            )
-            if fetch_result.stderr:
-                print(
-                    f"[PRReview] DEBUG: fetch stderr={fetch_result.stderr[:200]}",
-                    flush=True,
-                )
-
-        # Create detached worktree at the PR commit
-        result = subprocess.run(
-            ["git", "worktree", "add", "--detach", str(worktree_path), head_sha],
-            cwd=self.project_dir,
-            capture_output=True,
-            text=True,
-            timeout=120,  # Worktree add can be slow for large repos
-        )
-
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: worktree add returncode={result.returncode}",
-                flush=True,
-            )
-            if result.stderr:
-                print(
-                    f"[PRReview] DEBUG: worktree add stderr={result.stderr[:200]}",
-                    flush=True,
-                )
-            if result.stdout:
-                print(
-                    f"[PRReview] DEBUG: worktree add stdout={result.stdout[:200]}",
-                    flush=True,
-                )
-
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to create worktree: {result.stderr}")
-
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: worktree created, exists={worktree_path.exists()}",
-                flush=True,
-            )
-        logger.info(f"[PRReview] Created worktree at {worktree_path}")
-        return worktree_path
+        return self.worktree_manager.create_worktree(head_sha, pr_number)
 
     def _cleanup_pr_worktree(self, worktree_path: Path) -> None:
         """Remove a temporary PR review worktree with fallback chain.
@@ -222,100 +159,16 @@ class ParallelOrchestratorReviewer:
         Args:
             worktree_path: Path to the worktree to remove
         """
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: _cleanup_pr_worktree called with {worktree_path}",
-                flush=True,
-            )
-
-        if not worktree_path or not worktree_path.exists():
-            if DEBUG_MODE:
-                print(
-                    "[PRReview] DEBUG: worktree path doesn't exist, skipping cleanup",
-                    flush=True,
-                )
-            return
-
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: Attempting to remove worktree at {worktree_path}",
-                flush=True,
-            )
-
-        # Try 1: git worktree remove
-        result = subprocess.run(
-            ["git", "worktree", "remove", "--force", str(worktree_path)],
-            cwd=self.project_dir,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if DEBUG_MODE:
-            print(
-                f"[PRReview] DEBUG: worktree remove returncode={result.returncode}",
-                flush=True,
-            )
-
-        if result.returncode == 0:
-            logger.info(f"[PRReview] Cleaned up worktree: {worktree_path.name}")
-            return
-
-        # Try 2: shutil.rmtree fallback
-        try:
-            shutil.rmtree(worktree_path, ignore_errors=True)
-            subprocess.run(
-                ["git", "worktree", "prune"],
-                cwd=self.project_dir,
-                capture_output=True,
-                timeout=30,
-            )
-            logger.warning(f"[PRReview] Used shutil fallback for: {worktree_path.name}")
-        except Exception as e:
-            logger.error(f"[PRReview] Failed to cleanup worktree {worktree_path}: {e}")
+        self.worktree_manager.remove_worktree(worktree_path)
 
     def _cleanup_stale_pr_worktrees(self) -> None:
-        """Clean up orphaned PR review worktrees on startup."""
-        worktree_dir = self.project_dir / PR_WORKTREE_DIR
-        if not worktree_dir.exists():
-            return
-
-        # Get registered worktrees from git
-        result = subprocess.run(
-            ["git", "worktree", "list", "--porcelain"],
-            cwd=self.project_dir,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        registered = set()
-        for line in result.stdout.split("\n"):
-            if line.startswith("worktree "):
-                # Safely parse - check bounds to prevent IndexError
-                parts = line.split(" ", 1)
-                if len(parts) > 1 and parts[1]:
-                    registered.add(Path(parts[1]))
-
-        # Remove unregistered directories
-        stale_count = 0
-        for item in worktree_dir.iterdir():
-            if item.is_dir() and item not in registered:
-                logger.info(f"[PRReview] Removing stale worktree: {item.name}")
-                shutil.rmtree(item, ignore_errors=True)
-                stale_count += 1
-
-        if stale_count > 0:
-            subprocess.run(
-                ["git", "worktree", "prune"],
-                cwd=self.project_dir,
-                capture_output=True,
-                timeout=30,
+        """Clean up orphaned, expired, and excess PR review worktrees on startup."""
+        stats = self.worktree_manager.cleanup_worktrees()
+        if stats["total"] > 0:
+            logger.info(
+                f"[PRReview] Cleanup: removed {stats['total']} worktrees "
+                f"(orphaned={stats['orphaned']}, expired={stats['expired']}, excess={stats['excess']})"
             )
-            if DEBUG_MODE:
-                print(
-                    f"[PRReview] DEBUG: Cleaned up {stale_count} stale worktree(s)",
-                    flush=True,
-                )
 
     def _define_specialist_agents(self) -> dict[str, AgentDefinition]:
         """
@@ -529,12 +382,12 @@ The SDK will run invoked agents in parallel automatically.
             agents: List of agent names that were invoked
         """
         if agents:
-            print(
+            safe_print(
                 f"[ParallelOrchestrator] Specialist agents invoked: {', '.join(agents)}",
                 flush=True,
             )
             for agent in agents:
-                print(f"[Agent:{agent}] Analysis complete", flush=True)
+                safe_print(f"[Agent:{agent}] Analysis complete")
 
     def _log_findings_summary(self, findings: list[PRReviewFinding]) -> None:
         """Log findings summary for verification.
@@ -543,13 +396,13 @@ The SDK will run invoked agents in parallel automatically.
             findings: List of findings to summarize
         """
         if findings:
-            print(
+            safe_print(
                 f"[ParallelOrchestrator] Parsed {len(findings)} findings from structured output",
                 flush=True,
             )
-            print("[ParallelOrchestrator] Findings summary:", flush=True)
+            safe_print("[ParallelOrchestrator] Findings summary:")
             for i, f in enumerate(findings, 1):
-                print(
+                safe_print(
                     f"  [{f.severity.value.upper()}] {i}. {f.title} ({f.file}:{f.line})",
                     flush=True,
                 )
@@ -584,7 +437,7 @@ The SDK will run invoked agents in parallel automatically.
             category=category,
             severity=severity,
             suggested_fix=finding_data.suggested_fix or "",
-            confidence=self._normalize_confidence(finding_data.confidence),
+            evidence=finding_data.evidence,
         )
 
     async def review(self, context: PRContext) -> PRReviewResult:
@@ -623,15 +476,15 @@ The SDK will run invoked agents in parallel automatically.
             head_sha = context.head_sha or context.head_branch
 
             if DEBUG_MODE:
-                print(
+                safe_print(
                     f"[PRReview] DEBUG: context.head_sha='{context.head_sha}'",
                     flush=True,
                 )
-                print(
+                safe_print(
                     f"[PRReview] DEBUG: context.head_branch='{context.head_branch}'",
                     flush=True,
                 )
-                print(f"[PRReview] DEBUG: resolved head_sha='{head_sha}'", flush=True)
+                safe_print(f"[PRReview] DEBUG: resolved head_sha='{head_sha}'")
 
             # SECURITY: Validate the resolved head_sha (whether SHA or branch name)
             # This catches invalid refs early before subprocess calls
@@ -644,7 +497,7 @@ The SDK will run invoked agents in parallel automatically.
 
             if not head_sha:
                 if DEBUG_MODE:
-                    print("[PRReview] DEBUG: No head_sha - using fallback", flush=True)
+                    safe_print("[PRReview] DEBUG: No head_sha - using fallback")
                 logger.warning(
                     "[ParallelOrchestrator] No head_sha available, using current checkout"
                 )
@@ -656,7 +509,7 @@ The SDK will run invoked agents in parallel automatically.
                 )
             else:
                 if DEBUG_MODE:
-                    print(
+                    safe_print(
                         f"[PRReview] DEBUG: Creating worktree for head_sha={head_sha}",
                         flush=True,
                     )
@@ -666,14 +519,14 @@ The SDK will run invoked agents in parallel automatically.
                     )
                     project_root = worktree_path
                     if DEBUG_MODE:
-                        print(
+                        safe_print(
                             f"[PRReview] DEBUG: Using worktree as "
                             f"project_root={project_root}",
                             flush=True,
                         )
                 except (RuntimeError, ValueError) as e:
                     if DEBUG_MODE:
-                        print(
+                        safe_print(
                             f"[PRReview] DEBUG: Worktree creation FAILED: {e}",
                             flush=True,
                         )
@@ -713,7 +566,7 @@ The SDK will run invoked agents in parallel automatically.
             async with client:
                 await client.query(prompt)
 
-                print(
+                safe_print(
                     f"[ParallelOrchestrator] Running orchestrator ({model})...",
                     flush=True,
                 )
@@ -757,7 +610,7 @@ The SDK will run invoked agents in parallel automatically.
             logger.info(
                 f"[ParallelOrchestrator] Session complete. Agents invoked: {final_agents}"
             )
-            print(
+            safe_print(
                 f"[ParallelOrchestrator] Complete. Agents invoked: {final_agents}",
                 flush=True,
             )
@@ -769,9 +622,11 @@ The SDK will run invoked agents in parallel automatically.
                 f"[ParallelOrchestrator] Review complete: {len(unique_findings)} findings"
             )
 
-            # Generate verdict
+            # Generate verdict (includes merge conflict check and branch-behind check)
             verdict, verdict_reasoning, blockers = self._generate_verdict(
-                unique_findings
+                unique_findings,
+                has_merge_conflicts=context.has_merge_conflicts,
+                merge_state_status=context.merge_state_status,
             )
 
             # Generate summary
@@ -799,6 +654,27 @@ The SDK will run invoked agents in parallel automatically.
                 latest_commit = context.commits[-1]
                 head_sha = latest_commit.get("oid") or latest_commit.get("sha")
 
+            # Get file blob SHAs for rebase-resistant follow-up reviews
+            # Blob SHAs persist across rebases - same content = same blob SHA
+            file_blobs: dict[str, str] = {}
+            try:
+                gh_client = GHClient(
+                    project_dir=self.project_dir,
+                    default_timeout=30.0,
+                    repo=self.config.repo,
+                )
+                pr_files = await gh_client.get_pr_files(context.pr_number)
+                for file in pr_files:
+                    filename = file.get("filename", "")
+                    blob_sha = file.get("sha", "")
+                    if filename and blob_sha:
+                        file_blobs[filename] = blob_sha
+                logger.info(
+                    f"Captured {len(file_blobs)} file blob SHAs for follow-up tracking"
+                )
+            except Exception as e:
+                logger.warning(f"Could not capture file blobs: {e}")
+
             result = PRReviewResult(
                 pr_number=context.pr_number,
                 repo=self.config.repo,
@@ -810,6 +686,7 @@ The SDK will run invoked agents in parallel automatically.
                 verdict_reasoning=verdict_reasoning,
                 blockers=blockers,
                 reviewed_commit_sha=head_sha,
+                reviewed_file_blobs=file_blobs,
             )
 
             self._report_progress(
@@ -945,7 +822,7 @@ The SDK will run invoked agents in parallel automatically.
             category=category,
             severity=severity,
             suggested_fix=f_data.get("suggested_fix", ""),
-            confidence=self._normalize_confidence(f_data.get("confidence", 85)),
+            evidence=f_data.get("evidence"),
         )
 
     def _parse_text_output(self, output: str) -> list[PRReviewFinding]:
@@ -993,10 +870,23 @@ The SDK will run invoked agents in parallel automatically.
         return unique
 
     def _generate_verdict(
-        self, findings: list[PRReviewFinding]
+        self,
+        findings: list[PRReviewFinding],
+        has_merge_conflicts: bool = False,
+        merge_state_status: str = "",
     ) -> tuple[MergeVerdict, str, list[str]]:
-        """Generate merge verdict based on findings."""
+        """Generate merge verdict based on findings, merge conflict status, and branch state."""
         blockers = []
+        is_branch_behind = merge_state_status == "BEHIND"
+
+        # CRITICAL: Merge conflicts block merging - check first
+        if has_merge_conflicts:
+            blockers.append(
+                "Merge Conflicts: PR has conflicts with base branch that must be resolved"
+            )
+        # Branch behind base is a warning, not a hard blocker
+        elif is_branch_behind:
+            blockers.append(BRANCH_BEHIND_BLOCKER_MSG)
 
         critical = [f for f in findings if f.severity == ReviewSeverity.CRITICAL]
         high = [f for f in findings if f.severity == ReviewSeverity.HIGH]
@@ -1007,8 +897,25 @@ The SDK will run invoked agents in parallel automatically.
             blockers.append(f"Critical: {f.title} ({f.file}:{f.line})")
 
         if blockers:
-            verdict = MergeVerdict.BLOCKED
-            reasoning = f"Blocked by {len(blockers)} critical issue(s)"
+            # Merge conflicts are the highest priority blocker
+            if has_merge_conflicts:
+                verdict = MergeVerdict.BLOCKED
+                reasoning = (
+                    "Blocked: PR has merge conflicts with base branch. "
+                    "Resolve conflicts before merge."
+                )
+            elif critical:
+                verdict = MergeVerdict.BLOCKED
+                reasoning = f"Blocked by {len(critical)} critical issue(s)"
+            # Branch behind is a soft blocker - NEEDS_REVISION, not BLOCKED
+            elif is_branch_behind:
+                verdict = MergeVerdict.NEEDS_REVISION
+                reasoning = BRANCH_BEHIND_REASONING
+                if low:
+                    reasoning += f" {len(low)} non-blocking suggestion(s) to consider."
+            else:
+                verdict = MergeVerdict.BLOCKED
+                reasoning = f"Blocked by {len(blockers)} issue(s)"
         elif high or medium:
             # High and Medium severity findings block merge
             verdict = MergeVerdict.NEEDS_REVISION

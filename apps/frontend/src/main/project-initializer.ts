@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } fr
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { getToolPath } from './cli-tool-manager';
+import { DEFAULT_CUSTOM_MCP_SERVERS } from '../shared/constants';
 
 /**
  * Debug logging - only logs when DEBUG=true or in development mode
@@ -223,6 +224,15 @@ const DATA_DIRECTORIES = [
   'roadmap'
 ];
 
+const DEFAULT_PROJECT_ENV_CONTENT = [
+  '# Auto Claude project environment',
+  '# Customize in the Auto Claude UI if needed.',
+  DEFAULT_CUSTOM_MCP_SERVERS.length > 0
+    ? `CUSTOM_MCP_SERVERS=${JSON.stringify(DEFAULT_CUSTOM_MCP_SERVERS)}`
+    : '',
+  '',
+].join('\n');
+
 /**
  * Result of initialization operation
  */
@@ -316,6 +326,13 @@ export function initializeProject(projectPath: string): InitializationResult {
       debug('Creating data directory', { dataDir, dirPath });
       mkdirSync(dirPath, { recursive: true });
       writeFileSync(path.join(dirPath, '.gitkeep'), '');
+    }
+
+    if (DEFAULT_CUSTOM_MCP_SERVERS.length > 0) {
+      const envPath = path.join(dotAutoBuildPath, '.env');
+      if (!existsSync(envPath)) {
+        writeFileSync(envPath, DEFAULT_PROJECT_ENV_CONTENT);
+      }
     }
 
     // Update .gitignore to exclude .auto-claude/
