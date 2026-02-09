@@ -21,7 +21,6 @@ try:
         TriageCategory,
         TriageResult,
     )
-    from .io_utils import safe_print
 except (ImportError, ValueError, SystemError):
     from models import (
         AICommentTriage,
@@ -33,11 +32,9 @@ except (ImportError, ValueError, SystemError):
         TriageCategory,
         TriageResult,
     )
-    from services.io_utils import safe_print
 
-# Evidence-based validation replaces confidence scoring
-# Findings without evidence are filtered out instead of using confidence thresholds
-MIN_EVIDENCE_LENGTH = 20  # Minimum chars for evidence to be considered valid
+# Confidence threshold for filtering findings (GitHub Copilot standard)
+CONFIDENCE_THRESHOLD = 0.80
 
 
 class ResponseParser:
@@ -59,22 +56,18 @@ class ResponseParser:
             )
             if json_match:
                 result = json.loads(json_match.group(1))
-                safe_print(f"[AI] Quick scan result: {result}")
+                print(f"[AI] Quick scan result: {result}", flush=True)
                 return result
         except (json.JSONDecodeError, ValueError) as e:
-            safe_print(f"[AI] Failed to parse scan result: {e}")
+            print(f"[AI] Failed to parse scan result: {e}", flush=True)
 
         return default_result
 
     @staticmethod
     def parse_review_findings(
-        response_text: str, require_evidence: bool = True
+        response_text: str, apply_confidence_filter: bool = True
     ) -> list[PRReviewFinding]:
-        """Parse findings from AI response with optional evidence validation.
-
-        Evidence-based validation: Instead of confidence scores, findings
-        require actual code evidence proving the issue exists.
-        """
+        """Parse findings from AI response with optional confidence filtering."""
         findings = []
 
         try:
@@ -84,14 +77,14 @@ class ResponseParser:
             if json_match:
                 findings_data = json.loads(json_match.group(1))
                 for i, f in enumerate(findings_data):
-                    # Get evidence (code snippet proving the issue)
-                    evidence = f.get("evidence") or f.get("code_snippet") or ""
+                    # Get confidence (default to 0.85 if not provided for backward compat)
+                    confidence = float(f.get("confidence", 0.85))
 
-                    # Apply evidence-based validation
-                    if require_evidence and len(evidence.strip()) < MIN_EVIDENCE_LENGTH:
-                        safe_print(
+                    # Apply confidence threshold filter
+                    if apply_confidence_filter and confidence < CONFIDENCE_THRESHOLD:
+                        print(
                             f"[AI] Dropped finding '{f.get('title', 'unknown')}': "
-                            f"insufficient evidence ({len(evidence.strip())} chars < {MIN_EVIDENCE_LENGTH})",
+                            f"confidence {confidence:.2f} < {CONFIDENCE_THRESHOLD}",
                             flush=True,
                         )
                         continue
@@ -112,14 +105,14 @@ class ResponseParser:
                             end_line=f.get("end_line"),
                             suggested_fix=f.get("suggested_fix"),
                             fixable=f.get("fixable", False),
-                            # Evidence-based validation fields
-                            evidence=evidence if evidence.strip() else None,
+                            # NEW: Support verification and redundancy fields
+                            confidence=confidence,
                             verification_note=f.get("verification_note"),
                             redundant_with=f.get("redundant_with"),
                         )
                     )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            safe_print(f"Failed to parse findings: {e}")
+            print(f"Failed to parse findings: {e}")
 
         return findings
 
@@ -149,7 +142,7 @@ class ResponseParser:
                         )
                     )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            safe_print(f"Failed to parse structural issues: {e}")
+            print(f"Failed to parse structural issues: {e}")
 
         return issues
 
@@ -182,7 +175,7 @@ class ResponseParser:
                         )
                     )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            safe_print(f"Failed to parse AI comment triages: {e}")
+            print(f"Failed to parse AI comment triages: {e}")
 
         return triages
 
@@ -220,6 +213,6 @@ class ResponseParser:
                 result.comment = data.get("comment")
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            safe_print(f"Failed to parse triage result: {e}")
+            print(f"Failed to parse triage result: {e}")
 
         return result

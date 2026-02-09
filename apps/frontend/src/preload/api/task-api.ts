@@ -11,10 +11,7 @@ import type {
   TaskLogs,
   TaskLogStreamChunk,
   SupportedIDE,
-  SupportedTerminal,
-  WorktreeCreatePROptions,
-  WorktreeCreatePRResult,
-  ImageAttachment
+  SupportedTerminal
 } from '../../shared/types';
 
 export interface TaskAPI {
@@ -36,14 +33,12 @@ export interface TaskAPI {
   submitReview: (
     taskId: string,
     approved: boolean,
-    feedback?: string,
-    images?: ImageAttachment[]
+    feedback?: string
   ) => Promise<IPCResult>;
   updateTaskStatus: (
     taskId: string,
-    status: TaskStatus,
-    options?: { forceCleanup?: boolean }
-  ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
+    status: TaskStatus
+  ) => Promise<IPCResult>;
   recoverStuckTask: (
     taskId: string,
     options?: import('../../shared/types').TaskRecoveryOptions
@@ -55,24 +50,21 @@ export interface TaskAPI {
   getWorktreeDiff: (taskId: string) => Promise<IPCResult<import('../../shared/types').WorktreeDiff>>;
   mergeWorktree: (taskId: string, options?: { noCommit?: boolean }) => Promise<IPCResult<import('../../shared/types').WorktreeMergeResult>>;
   mergeWorktreePreview: (taskId: string) => Promise<IPCResult<import('../../shared/types').WorktreeMergeResult>>;
-  discardWorktree: (taskId: string, skipStatusChange?: boolean) => Promise<IPCResult<import('../../shared/types').WorktreeDiscardResult>>;
-  clearStagedState: (taskId: string) => Promise<IPCResult<{ cleared: boolean }>>;
+  discardWorktree: (taskId: string) => Promise<IPCResult<import('../../shared/types').WorktreeDiscardResult>>;
   listWorktrees: (projectId: string) => Promise<IPCResult<import('../../shared/types').WorktreeListResult>>;
   worktreeOpenInIDE: (worktreePath: string, ide: SupportedIDE, customPath?: string) => Promise<IPCResult<{ opened: boolean }>>;
   worktreeOpenInTerminal: (worktreePath: string, terminal: SupportedTerminal, customPath?: string) => Promise<IPCResult<{ opened: boolean }>>;
   worktreeDetectTools: () => Promise<IPCResult<{ ides: Array<{ id: string; name: string; path: string; installed: boolean }>; terminals: Array<{ id: string; name: string; path: string; installed: boolean }> }>>;
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
-  createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
 
   // Task Event Listeners
-  // Note: projectId is optional for backward compatibility - events without projectId will still work
-  onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan, projectId?: string) => void) => () => void;
-  onTaskError: (callback: (taskId: string, error: string, projectId?: string) => void) => () => void;
-  onTaskLog: (callback: (taskId: string, log: string, projectId?: string) => void) => () => void;
-  onTaskStatusChange: (callback: (taskId: string, status: TaskStatus, projectId?: string) => void) => () => void;
+  onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan) => void) => () => void;
+  onTaskError: (callback: (taskId: string, error: string) => void) => () => void;
+  onTaskLog: (callback: (taskId: string, log: string) => void) => () => void;
+  onTaskStatusChange: (callback: (taskId: string, status: TaskStatus) => void) => () => void;
   onTaskExecutionProgress: (
-    callback: (taskId: string, progress: import('../../shared/types').ExecutionProgress, projectId?: string) => void
+    callback: (taskId: string, progress: import('../../shared/types').ExecutionProgress) => void
   ) => () => void;
 
   // Task Phase Logs
@@ -114,17 +106,15 @@ export const createTaskAPI = (): TaskAPI => ({
   submitReview: (
     taskId: string,
     approved: boolean,
-    feedback?: string,
-    images?: ImageAttachment[]
+    feedback?: string
   ): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW, taskId, approved, feedback, images),
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW, taskId, approved, feedback),
 
   updateTaskStatus: (
     taskId: string,
-    status: TaskStatus,
-    options?: { forceCleanup?: boolean }
-  ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status, options),
+    status: TaskStatus
+  ): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status),
 
   recoverStuckTask: (
     taskId: string,
@@ -148,11 +138,8 @@ export const createTaskAPI = (): TaskAPI => ({
   mergeWorktreePreview: (taskId: string): Promise<IPCResult<import('../../shared/types').WorktreeMergeResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_MERGE_PREVIEW, taskId),
 
-  discardWorktree: (taskId: string, skipStatusChange?: boolean): Promise<IPCResult<import('../../shared/types').WorktreeDiscardResult>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_DISCARD, taskId, skipStatusChange),
-
-  clearStagedState: (taskId: string): Promise<IPCResult<{ cleared: boolean }>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_CLEAR_STAGED_STATE, taskId),
+  discardWorktree: (taskId: string): Promise<IPCResult<import('../../shared/types').WorktreeDiscardResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_DISCARD, taskId),
 
   listWorktrees: (projectId: string): Promise<IPCResult<import('../../shared/types').WorktreeListResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_LIST_WORKTREES, projectId),
@@ -172,20 +159,16 @@ export const createTaskAPI = (): TaskAPI => ({
   unarchiveTasks: (projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UNARCHIVE, projectId, taskIds),
 
-  createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
-
   // Task Event Listeners
   onTaskProgress: (
-    callback: (taskId: string, plan: ImplementationPlan, projectId?: string) => void
+    callback: (taskId: string, plan: ImplementationPlan) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       taskId: string,
-      plan: ImplementationPlan,
-      projectId?: string
+      plan: ImplementationPlan
     ): void => {
-      callback(taskId, plan, projectId);
+      callback(taskId, plan);
     };
     ipcRenderer.on(IPC_CHANNELS.TASK_PROGRESS, handler);
     return () => {
@@ -194,15 +177,14 @@ export const createTaskAPI = (): TaskAPI => ({
   },
 
   onTaskError: (
-    callback: (taskId: string, error: string, projectId?: string) => void
+    callback: (taskId: string, error: string) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       taskId: string,
-      error: string,
-      projectId?: string
+      error: string
     ): void => {
-      callback(taskId, error, projectId);
+      callback(taskId, error);
     };
     ipcRenderer.on(IPC_CHANNELS.TASK_ERROR, handler);
     return () => {
@@ -211,15 +193,14 @@ export const createTaskAPI = (): TaskAPI => ({
   },
 
   onTaskLog: (
-    callback: (taskId: string, log: string, projectId?: string) => void
+    callback: (taskId: string, log: string) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       taskId: string,
-      log: string,
-      projectId?: string
+      log: string
     ): void => {
-      callback(taskId, log, projectId);
+      callback(taskId, log);
     };
     ipcRenderer.on(IPC_CHANNELS.TASK_LOG, handler);
     return () => {
@@ -228,15 +209,14 @@ export const createTaskAPI = (): TaskAPI => ({
   },
 
   onTaskStatusChange: (
-    callback: (taskId: string, status: TaskStatus, projectId?: string) => void
+    callback: (taskId: string, status: TaskStatus) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       taskId: string,
-      status: TaskStatus,
-      projectId?: string
+      status: TaskStatus
     ): void => {
-      callback(taskId, status, projectId);
+      callback(taskId, status);
     };
     ipcRenderer.on(IPC_CHANNELS.TASK_STATUS_CHANGE, handler);
     return () => {
@@ -245,15 +225,14 @@ export const createTaskAPI = (): TaskAPI => ({
   },
 
   onTaskExecutionProgress: (
-    callback: (taskId: string, progress: import('../../shared/types').ExecutionProgress, projectId?: string) => void
+    callback: (taskId: string, progress: import('../../shared/types').ExecutionProgress) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       taskId: string,
-      progress: import('../../shared/types').ExecutionProgress,
-      projectId?: string
+      progress: import('../../shared/types').ExecutionProgress
     ): void => {
-      callback(taskId, progress, projectId);
+      callback(taskId, progress);
     };
     ipcRenderer.on(IPC_CHANNELS.TASK_EXECUTION_PROGRESS, handler);
     return () => {

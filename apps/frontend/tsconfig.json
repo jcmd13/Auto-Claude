@@ -16,7 +16,6 @@
     "paths": {
       "@/*": ["src/renderer/*"],
       "@shared/*": ["src/shared/*"],
-      "@preload/*": ["src/preload/*"],
       "@features/*": ["src/renderer/features/*"],
       "@components/*": ["src/renderer/shared/components/*"],
       "@hooks/*": ["src/renderer/shared/hooks/*"],

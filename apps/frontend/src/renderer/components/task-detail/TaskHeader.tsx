@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { X, Pencil, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -26,8 +25,6 @@ export function TaskHeader({
   onClose,
   onEdit
 }: TaskHeaderProps) {
-  const { t } = useTranslation('tasks');
-
   return (
     <div className="flex items-start justify-between p-4 pb-3">
       <div className="flex-1 min-w-0 pr-2">
@@ -68,7 +65,7 @@ export function TaskHeader({
                 variant={task.status === 'done' ? 'success' : task.status === 'human_review' ? 'purple' : task.status === 'in_progress' ? 'info' : 'secondary'}
                 className={cn('text-xs', (task.status === 'in_progress' && !isStuck) && 'status-running')}
               >
-                {t(TASK_STATUS_LABELS[task.status])}
+                {TASK_STATUS_LABELS[task.status]}
               </Badge>
               {task.status === 'human_review' && task.reviewReason && (
                 <Badge
@@ -94,17 +91,16 @@ export function TaskHeader({
                 className="hover:bg-primary/10 hover:text-primary transition-colors"
                 onClick={onEdit}
                 disabled={isRunning && !isStuck}
-                aria-label={isRunning && !isStuck ? t('kanban.cannotEditWhileRunning') : t('kanban.editTask')}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {isRunning && !isStuck ? t('kanban.cannotEditWhileRunning') : t('kanban.editTask')}
+            {isRunning && !isStuck ? 'Cannot edit while task is running' : 'Edit task'}
           </TooltipContent>
         </Tooltip>
-        <Button variant="ghost" size="icon" className="hover:bg-destructive/10 hover:text-destructive transition-colors" onClick={onClose} aria-label={t('kanban.closeTaskDetailsAriaLabel')}>
+        <Button variant="ghost" size="icon" className="hover:bg-destructive/10 hover:text-destructive transition-colors" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>

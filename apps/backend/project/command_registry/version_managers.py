@@ -23,8 +23,6 @@ VERSION_MANAGER_COMMANDS: dict[str, set[str]] = {
     "rustup": {"rustup"},
     "sdkman": {"sdk"},
     "jabba": {"jabba"},
-    # Dart/Flutter version managers
-    "fvm": {"fvm", "flutter"},
 }
 
 

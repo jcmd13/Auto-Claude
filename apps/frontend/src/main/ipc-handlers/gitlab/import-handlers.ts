@@ -63,7 +63,7 @@ export function registerImportIssues(): void {
           ) as GitLabAPIIssue;
 
           // Create a spec/task from the issue
-          const task = await createSpecForIssue(project, apiIssue, config, project.settings?.mainBranch);
+          const task = await createSpecForIssue(project, apiIssue, config);
 
           if (task) {
             tasks.push(task);

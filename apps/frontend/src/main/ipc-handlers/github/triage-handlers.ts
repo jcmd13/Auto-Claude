@@ -19,7 +19,6 @@ import type { Project, AppSettings } from '../../../shared/types';
 import { createContextLogger } from './utils/logger';
 import { withProjectOrNull } from './utils/project-middleware';
 import { createIPCCommunicators } from './utils/ipc-communicator';
-import { getRunnerEnv } from './utils/runner-env';
 import {
   runPythonSubprocess,
   getPythonPath,
@@ -255,13 +254,10 @@ async function runTriage(
 
   debugLog('Spawning triage process', { args, model, thinkingLevel });
 
-  const subprocessEnv = await getRunnerEnv();
-
   const { promise } = runPythonSubprocess<TriageResult[]>({
     pythonPath: getPythonPath(backendPath),
     args,
     cwd: backendPath,
-    env: subprocessEnv,
     onProgress: (percent, message) => {
       debugLog('Progress update', { percent, message });
       sendProgress({

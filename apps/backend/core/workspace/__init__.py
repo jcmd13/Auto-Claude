@@ -4,7 +4,7 @@ Workspace Management Package
 =============================
 
 Handles workspace isolation through Git worktrees, where each spec
-gets its own isolated worktree in .auto-claude/worktrees/tasks/{spec-name}/.
+gets its own isolated worktree in .worktrees/{spec-name}/.
 
 This package provides:
 - Workspace setup and configuration
@@ -28,10 +28,6 @@ _workspace_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_workspace_module)
 merge_existing_build = _workspace_module.merge_existing_build
 _run_parallel_merges = _workspace_module._run_parallel_merges
-AI_MERGE_SYSTEM_PROMPT = _workspace_module.AI_MERGE_SYSTEM_PROMPT
-_build_merge_prompt = _workspace_module._build_merge_prompt
-_check_git_conflicts = _workspace_module._check_git_conflicts
-_rebase_spec_branch = _workspace_module._rebase_spec_branch
 
 # Models and Enums
 # Display Functions
@@ -66,7 +62,6 @@ from .git_utils import (
     MAX_SYNTAX_FIX_RETRIES,
     MERGE_LOCK_TIMEOUT,
     _create_conflict_file_with_git,
-    _get_binary_file_content_from_ref,
     _get_changed_files_from_branch,
     _get_file_content_from_ref,
     _is_binary_file,
@@ -75,7 +70,6 @@ from .git_utils import (
     _is_process_running,
     _validate_merged_syntax,
     create_conflict_file_with_git,
-    get_binary_file_content_from_ref,
     get_changed_files_from_branch,
     get_current_branch,
     get_existing_build_worktree,
@@ -111,10 +105,6 @@ __all__ = [
     # Merge Operations (from workspace.py)
     "merge_existing_build",
     "_run_parallel_merges",  # Private but used internally
-    "AI_MERGE_SYSTEM_PROMPT",  # System prompt for AI merge (ACS-194)
-    "_build_merge_prompt",  # Internal prompt builder (ACS-194)
-    "_check_git_conflicts",  # Internal git conflict detection (ACS-224)
-    "_rebase_spec_branch",  # Internal rebase function (ACS-224)
     # Models
     "WorkspaceMode",
     "WorkspaceChoice",
@@ -127,7 +117,6 @@ __all__ = [
     "get_current_branch",
     "get_existing_build_worktree",
     "get_file_content_from_ref",
-    "get_binary_file_content_from_ref",
     "get_changed_files_from_branch",
     "is_process_running",
     "is_binary_file",

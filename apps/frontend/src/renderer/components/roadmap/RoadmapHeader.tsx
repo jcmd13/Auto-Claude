@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { Target, Users, BarChart3, RefreshCw, Plus, TrendingUp } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -8,7 +7,6 @@ import { ROADMAP_PRIORITY_COLORS } from '../../../shared/constants';
 import type { RoadmapHeaderProps } from './types';
 
 export function RoadmapHeader({ roadmap, competitorAnalysis, onAddFeature, onRefresh, onViewCompetitorAnalysis }: RoadmapHeaderProps) {
-  const { t } = useTranslation('common');
   const stats = getFeatureStats(roadmap);
 
   return (
@@ -57,7 +55,7 @@ export function RoadmapHeader({ roadmap, competitorAnalysis, onAddFeature, onRef
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={onRefresh} aria-label={t('accessibility.regenerateRoadmapAriaLabel')}>
+              <Button variant="outline" size="icon" onClick={onRefresh}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </TooltipTrigger>

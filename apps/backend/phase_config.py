@@ -7,7 +7,6 @@ Reads configuration from task_metadata.json and provides resolved model IDs.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Literal, TypedDict
 
@@ -47,10 +46,10 @@ SPEC_PHASE_THINKING_LEVELS: dict[str, str] = {
     "complexity_assessment": "medium",
 }
 
-# Default phase configuration (fallback, matches 'Balanced' profile)
+# Default phase configuration (matches UI defaults)
 DEFAULT_PHASE_MODELS: dict[str, str] = {
     "spec": "sonnet",
-    "planning": "sonnet",  # Changed from "opus" (fix #433)
+    "planning": "opus",
     "coding": "sonnet",
     "qa": "sonnet",
 }
@@ -95,34 +94,17 @@ def resolve_model_id(model: str) -> str:
     Resolve a model shorthand (haiku, sonnet, opus) to a full model ID.
     If the model is already a full ID, return it unchanged.
 
-    Priority:
-    1. Environment variable override (from API Profile)
-    2. Hardcoded MODEL_ID_MAP
-    3. Pass through unchanged (assume full model ID)
-
     Args:
         model: Model shorthand or full ID
 
     Returns:
         Full Claude model ID
     """
-    # Check for environment variable override (from API Profile custom model mappings)
+    # Check if it's a shorthand
     if model in MODEL_ID_MAP:
-        env_var_map = {
-            "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-            "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-        }
-        env_var = env_var_map.get(model)
-        if env_var:
-            env_value = os.environ.get(env_var)
-            if env_value:
-                return env_value
-
-        # Fall back to hardcoded mapping
         return MODEL_ID_MAP[model]
 
-    # Already a full model ID or unknown shorthand
+    # Already a full model ID
     return model
 
 

@@ -129,9 +129,7 @@ def get_codex_login_status() -> tuple[bool, str]:
     if result.returncode != 0:
         return False, combined or "codex login status failed"
 
-    # Check combined output (stdout + stderr) for "logged in" since
-    # some Codex versions may output status info to stderr instead of stdout
-    return ("logged in" in combined.lower()), (combined or stdout)
+    return ("logged in" in stdout.lower()), (stdout or combined)
 
 
 def is_codex_logged_in_via_chatgpt() -> bool:

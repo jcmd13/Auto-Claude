@@ -141,10 +141,7 @@ export function InvestigationDialog({
                     {selectedNoteIds.length === notes.length ? t('investigation.deselectAll') : t('investigation.selectAll')}
                   </Button>
                 </div>
-                <ScrollArea
-                  className="flex min-h-0 border rounded-md"
-                  viewportClassName="h-auto"
-                >
+                <ScrollArea className="flex-1 min-h-0 border rounded-md">
                   <div className="p-2 space-y-2">
                     {notes.map((note) => (
                       <button

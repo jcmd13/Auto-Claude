@@ -7,7 +7,7 @@ import { Separator } from '../../ui/separator';
 import { Button } from '../../ui/button';
 import { GitHubOAuthFlow } from '../../project-settings/GitHubOAuthFlow';
 import { PasswordInput } from '../../project-settings/PasswordInput';
-import type { ProjectEnvConfig, GitHubSyncStatus, ProjectSettings } from '../../../../shared/types';
+import type { ProjectEnvConfig, GitHubSyncStatus } from '../../../../shared/types';
 
 // Debug logging
 const DEBUG = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
@@ -35,9 +35,6 @@ interface GitHubIntegrationProps {
   gitHubConnectionStatus: GitHubSyncStatus | null;
   isCheckingGitHub: boolean;
   projectPath?: string; // Project path for fetching git branches
-  // Project settings for mainBranch (used by kanban tasks and terminal worktrees)
-  settings?: ProjectSettings;
-  setSettings?: React.Dispatch<React.SetStateAction<ProjectSettings>>;
 }
 
 /**
@@ -51,9 +48,7 @@ export function GitHubIntegration({
   setShowGitHubToken: _setShowGitHubToken,
   gitHubConnectionStatus,
   isCheckingGitHub,
-  projectPath,
-  settings,
-  setSettings
+  projectPath
 }: GitHubIntegrationProps) {
   const [authMode, setAuthMode] = useState<'manual' | 'oauth' | 'oauth-success'>('manual');
   const [oauthUsername, setOauthUsername] = useState<string | null>(null);
@@ -89,24 +84,6 @@ export function GitHubIntegration({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envConfig?.githubEnabled, projectPath]);
 
-  /**
-   * Handler for branch selection changes.
-   * Updates BOTH project.settings.mainBranch (for Electron app) and envConfig.defaultBranch (for CLI backward compatibility).
-   */
-  const handleBranchChange = (branch: string) => {
-    debugLog('handleBranchChange: Updating branch to:', branch);
-
-    // Update project settings (primary source for Electron app)
-    if (setSettings) {
-      setSettings(prev => ({ ...prev, mainBranch: branch }));
-      debugLog('handleBranchChange: Updated settings.mainBranch');
-    }
-
-    // Also update envConfig for CLI backward compatibility
-    updateEnvConfig({ defaultBranch: branch });
-    debugLog('handleBranchChange: Updated envConfig.defaultBranch');
-  };
-
   const fetchBranches = async () => {
     if (!projectPath) {
       debugLog('fetchBranches: No projectPath, skipping');
@@ -127,15 +104,14 @@ export function GitHubIntegration({
         setBranches(result.data);
         debugLog('fetchBranches: Loaded branches:', result.data.length);
 
-        // Auto-detect default branch if not set in project settings
-        // Priority: settings.mainBranch > envConfig.defaultBranch > auto-detect
-        if (!settings?.mainBranch && !envConfig?.defaultBranch) {
-          debugLog('fetchBranches: No branch set, auto-detecting...');
+        // Auto-detect default branch if not set
+        if (!envConfig?.defaultBranch) {
+          debugLog('fetchBranches: No defaultBranch set, auto-detecting...');
           const detectResult = await window.electronAPI.detectMainBranch(projectPath);
           debugLog('fetchBranches: detectMainBranch result:', detectResult);
           if (detectResult.success && detectResult.data) {
             debugLog('fetchBranches: Auto-detected default branch:', detectResult.data);
-            handleBranchChange(detectResult.data);
+            updateEnvConfig({ defaultBranch: detectResult.data });
           }
         }
       } else {
@@ -338,10 +314,10 @@ export function GitHubIntegration({
           {projectPath && (
             <BranchSelector
               branches={branches}
-              selectedBranch={settings?.mainBranch || envConfig.defaultBranch || ''}
+              selectedBranch={envConfig.defaultBranch || ''}
               isLoading={isLoadingBranches}
               error={branchesError}
-              onSelect={handleBranchChange}
+              onSelect={(branch) => updateEnvConfig({ defaultBranch: branch })}
               onRefresh={fetchBranches}
             />
           )}

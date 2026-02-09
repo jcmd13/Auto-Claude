@@ -48,9 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   // Beta updates opt-in (receive pre-release versions)
   betaUpdates: false,
   // Language preference (default to English)
-  language: 'en' as const,
-  // Anonymous error reporting (Sentry) - enabled by default to help improve the app
-  sentryEnabled: true
+  language: 'en' as const
 };
 
 // ============================================

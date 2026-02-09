@@ -30,7 +30,6 @@ interface ProcessorResult {
 export class InsightsExecutor extends EventEmitter {
   private config: InsightsConfig;
   private activeSessions: Map<string, ChildProcess> = new Map();
-  private activeSessionIds: Map<string, string> = new Map();
 
   constructor(config: InsightsConfig) {
     super();
@@ -45,32 +44,14 @@ export class InsightsExecutor extends EventEmitter {
   }
 
   /**
-   * Get the active session ID for a project
-   */
-  getActiveSessionId(projectId: string): string | null {
-    return this.activeSessionIds.get(projectId) || null;
-  }
-
-  /**
-   * Get all active session IDs
-   */
-  getActiveSessionIds(): string[] {
-    return Array.from(this.activeSessionIds.values());
-  }
-
-  /**
    * Cancel an active session
    */
   cancelSession(projectId: string): boolean {
     const existingProcess = this.activeSessions.get(projectId);
-    if (!existingProcess) {
-      this.activeSessionIds.delete(projectId);
-      return false;
-    }
+    if (!existingProcess) return false;
 
     existingProcess.kill();
     this.activeSessions.delete(projectId);
-    this.activeSessionIds.delete(projectId);
     return true;
   }
 
@@ -79,7 +60,6 @@ export class InsightsExecutor extends EventEmitter {
    */
   async execute(
     projectId: string,
-    sessionId: string,
     projectPath: string,
     message: string,
     conversationHistory: Array<{ role: string; content: string }>,
@@ -105,7 +85,7 @@ export class InsightsExecutor extends EventEmitter {
     } as InsightsChatStatus);
 
     // Get process environment
-    const processEnv = await this.config.getProcessEnv();
+    const processEnv = this.config.getProcessEnv();
 
     // Write conversation history to temp file to avoid Windows command-line length limit
     const historyFile = path.join(
@@ -144,14 +124,12 @@ export class InsightsExecutor extends EventEmitter {
     });
 
     this.activeSessions.set(projectId, proc);
-    this.activeSessionIds.set(projectId, sessionId);
 
     return new Promise((resolve, reject) => {
       let fullResponse = '';
       let suggestedTask: InsightsChatMessage['suggestedTask'] | undefined;
       const toolsUsed: InsightsToolUsage[] = [];
       let allInsightsOutput = '';
-      let stderrOutput = '';
 
       proc.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
@@ -181,19 +159,13 @@ export class InsightsExecutor extends EventEmitter {
 
       proc.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
-        // Collect stderr for rate limit detection and error reporting
+        // Collect stderr for rate limit detection too
         allInsightsOutput = (allInsightsOutput + text).slice(-10000);
-        stderrOutput = (stderrOutput + text).slice(-2000);
         console.error('[Insights]', text);
       });
 
       proc.on('close', (code) => {
-        if (this.activeSessions.get(projectId) === proc) {
-          this.activeSessions.delete(projectId);
-        }
-        if (this.activeSessionIds.get(projectId) === sessionId) {
-          this.activeSessionIds.delete(projectId);
-        }
+        this.activeSessions.delete(projectId);
 
         // Cleanup temp file
         if (historyFileCreated && existsSync(historyFile)) {
@@ -224,11 +196,7 @@ export class InsightsExecutor extends EventEmitter {
             toolsUsed
           });
         } else {
-          // Include stderr output in error message for debugging
-          const stderrSummary = stderrOutput.trim()
-            ? `\n\nError output:\n${stderrOutput.slice(-500)}`
-            : '';
-          const error = `Process exited with code ${code}${stderrSummary}`;
+          const error = `Process exited with code ${code}`;
           this.emit('stream-chunk', projectId, {
             type: 'error',
             error
@@ -240,12 +208,7 @@ export class InsightsExecutor extends EventEmitter {
       });
 
       proc.on('error', (err) => {
-        if (this.activeSessions.get(projectId) === proc) {
-          this.activeSessions.delete(projectId);
-        }
-        if (this.activeSessionIds.get(projectId) === sessionId) {
-          this.activeSessionIds.delete(projectId);
-        }
+        this.activeSessions.delete(projectId);
 
         // Cleanup temp file
         if (historyFileCreated && existsSync(historyFile)) {

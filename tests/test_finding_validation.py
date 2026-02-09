@@ -4,10 +4,6 @@ Tests for Finding Validation System
 
 Tests the finding-validator agent integration and FindingValidationResult models.
 This system prevents false positives from persisting by re-investigating unresolved findings.
-
-NOTE: The validation system has been updated to use EVIDENCE-BASED validation
-instead of confidence scores. The key field is now `evidence_verified_in_file`
-which is a boolean indicating whether the code evidence was found at the specified location.
 """
 
 import sys
@@ -36,8 +32,10 @@ from pydantic_models import (
 )
 from models import (
     PRReviewFinding,
+    PRReviewResult,
     ReviewSeverity,
     ReviewCategory,
+    MergeVerdict,
 )
 
 
@@ -57,12 +55,12 @@ class TestFindingValidationResultModel:
             code_evidence="const query = `SELECT * FROM users WHERE id = ${userId}`;",
             line_range=(45, 45),
             explanation="SQL injection is present - user input is concatenated directly into the query.",
-            evidence_verified_in_file=True,
+            confidence=0.92,
         )
         assert result.finding_id == "SEC-001"
         assert result.validation_status == "confirmed_valid"
         assert "SELECT" in result.code_evidence
-        assert result.evidence_verified_in_file is True
+        assert result.confidence == 0.92
 
     def test_valid_dismissed_false_positive(self):
         """Test creating a dismissed_false_positive validation result."""
@@ -72,10 +70,10 @@ class TestFindingValidationResultModel:
             code_evidence="const sanitized = DOMPurify.sanitize(data);",
             line_range=(23, 26),
             explanation="Original finding claimed XSS but code uses DOMPurify.sanitize() for protection.",
-            evidence_verified_in_file=True,
+            confidence=0.88,
         )
         assert result.validation_status == "dismissed_false_positive"
-        assert result.evidence_verified_in_file is True
+        assert result.confidence == 0.88
 
     def test_valid_needs_human_review(self):
         """Test creating a needs_human_review validation result."""
@@ -85,23 +83,10 @@ class TestFindingValidationResultModel:
             code_evidence="async function handleRequest(req) { ... }",
             line_range=(100, 150),
             explanation="Race condition claim requires runtime analysis to verify.",
-            evidence_verified_in_file=True,
+            confidence=0.45,
         )
         assert result.validation_status == "needs_human_review"
-        assert result.evidence_verified_in_file is True
-
-    def test_hallucinated_finding_not_verified(self):
-        """Test creating a result where evidence was not verified (hallucinated finding)."""
-        result = FindingValidationResult(
-            finding_id="HALLUC-001",
-            validation_status="dismissed_false_positive",
-            code_evidence="// Line 710 does not exist - file only has 600 lines",
-            line_range=(600, 600),
-            explanation="Original finding cited line 710 but file only has 600 lines. Hallucinated finding.",
-            evidence_verified_in_file=False,
-        )
-        assert result.validation_status == "dismissed_false_positive"
-        assert result.evidence_verified_in_file is False
+        assert result.confidence == 0.45
 
     def test_code_evidence_required(self):
         """Test that code_evidence cannot be empty."""
@@ -112,7 +97,7 @@ class TestFindingValidationResultModel:
                 code_evidence="",  # Empty string should fail
                 line_range=(45, 45),
                 explanation="This is a detailed explanation of the issue.",
-                evidence_verified_in_file=True,
+                confidence=0.92,
             )
         errors = exc_info.value.errors()
         assert any("code_evidence" in str(e) for e in errors)
@@ -126,24 +111,34 @@ class TestFindingValidationResultModel:
                 code_evidence="const x = 1;",
                 line_range=(45, 45),
                 explanation="Too short",  # Less than 20 chars
-                evidence_verified_in_file=True,
+                confidence=0.92,
             )
         errors = exc_info.value.errors()
         assert any("explanation" in str(e) for e in errors)
 
-    def test_evidence_verified_required(self):
-        """Test that evidence_verified_in_file is required."""
-        with pytest.raises(ValidationError) as exc_info:
+    def test_confidence_normalized_from_percentage(self):
+        """Test that confidence 0-100 is normalized to 0.0-1.0."""
+        result = FindingValidationResult(
+            finding_id="SEC-001",
+            validation_status="confirmed_valid",
+            code_evidence="const query = `SELECT * FROM users`;",
+            line_range=(45, 45),
+            explanation="SQL injection vulnerability found in the query construction.",
+            confidence=85,  # Percentage value
+        )
+        assert result.confidence == 0.85
+
+    def test_confidence_range_validation(self):
+        """Test that confidence must be between 0.0 and 1.0 after normalization."""
+        with pytest.raises(ValidationError):
             FindingValidationResult(
                 finding_id="SEC-001",
                 validation_status="confirmed_valid",
-                code_evidence="const query = `SELECT * FROM users`;",
+                code_evidence="const x = 1;",
                 line_range=(45, 45),
-                explanation="SQL injection vulnerability found in the query construction.",
-                # Missing evidence_verified_in_file
+                explanation="This is a detailed explanation of the issue.",
+                confidence=150,  # Will normalize to 1.5, which is out of range
             )
-        errors = exc_info.value.errors()
-        assert any("evidence_verified_in_file" in str(e) for e in errors)
 
     def test_invalid_validation_status(self):
         """Test that invalid validation_status values are rejected."""
@@ -154,7 +149,7 @@ class TestFindingValidationResultModel:
                 code_evidence="const x = 1;",
                 line_range=(45, 45),
                 explanation="This is a detailed explanation of the issue.",
-                evidence_verified_in_file=True,
+                confidence=0.92,
             )
 
 
@@ -171,7 +166,7 @@ class TestFindingValidationResponse:
                     code_evidence="const query = `SELECT * FROM users`;",
                     line_range=(45, 45),
                     explanation="SQL injection confirmed in this query.",
-                    evidence_verified_in_file=True,
+                    confidence=0.92,
                 ),
                 FindingValidationResult(
                     finding_id="QUAL-002",
@@ -179,7 +174,7 @@ class TestFindingValidationResponse:
                     code_evidence="const sanitized = DOMPurify.sanitize(data);",
                     line_range=(23, 26),
                     explanation="Code uses DOMPurify so XSS claim is false.",
-                    evidence_verified_in_file=True,
+                    confidence=0.88,
                 ),
             ],
             summary="1 finding confirmed valid, 1 dismissed as false positive",
@@ -202,6 +197,7 @@ class TestParallelFollowupResponseWithValidation:
                 ResolutionVerification(
                     finding_id="SEC-001",
                     status="unresolved",
+                    confidence=0.85,
                     evidence="File was not modified",
                 )
             ],
@@ -212,7 +208,7 @@ class TestParallelFollowupResponseWithValidation:
                     code_evidence="const query = `SELECT * FROM users`;",
                     line_range=(45, 45),
                     explanation="SQL injection confirmed in this query.",
-                    evidence_verified_in_file=True,
+                    confidence=0.92,
                 )
             ],
             new_findings=[],
@@ -235,6 +231,7 @@ class TestParallelFollowupResponseWithValidation:
                 ResolutionVerification(
                     finding_id="SEC-001",
                     status="unresolved",
+                    confidence=0.50,
                     evidence="Line wasn't changed but need to verify",
                 )
             ],
@@ -245,7 +242,7 @@ class TestParallelFollowupResponseWithValidation:
                     code_evidence="const query = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);",
                     line_range=(45, 48),
                     explanation="Original review misread - using parameterized query.",
-                    evidence_verified_in_file=True,
+                    confidence=0.95,
                 )
             ],
             new_findings=[],
@@ -278,10 +275,11 @@ class TestPRReviewFindingValidationFields:
             line=42,
             validation_status="confirmed_valid",
             validation_evidence="const query = `SELECT * FROM users`;",
+            validation_confidence=0.92,
             validation_explanation="SQL injection confirmed in the query.",
         )
         assert finding.validation_status == "confirmed_valid"
-        assert finding.validation_evidence is not None
+        assert finding.validation_confidence == 0.92
 
     def test_finding_without_validation_fields(self):
         """Test that validation fields are optional."""
@@ -296,6 +294,7 @@ class TestPRReviewFindingValidationFields:
         )
         assert finding.validation_status is None
         assert finding.validation_evidence is None
+        assert finding.validation_confidence is None
         assert finding.validation_explanation is None
 
     def test_finding_to_dict_includes_validation(self):
@@ -310,11 +309,13 @@ class TestPRReviewFindingValidationFields:
             line=42,
             validation_status="confirmed_valid",
             validation_evidence="const query = ...;",
+            validation_confidence=0.92,
             validation_explanation="Issue confirmed.",
         )
         data = finding.to_dict()
         assert data["validation_status"] == "confirmed_valid"
         assert data["validation_evidence"] == "const query = ...;"
+        assert data["validation_confidence"] == 0.92
         assert data["validation_explanation"] == "Issue confirmed."
 
     def test_finding_from_dict_with_validation(self):
@@ -329,10 +330,12 @@ class TestPRReviewFindingValidationFields:
             "line": 42,
             "validation_status": "dismissed_false_positive",
             "validation_evidence": "parameterized query used",
+            "validation_confidence": 0.88,
             "validation_explanation": "False positive - using prepared statements.",
         }
         finding = PRReviewFinding.from_dict(data)
         assert finding.validation_status == "dismissed_false_positive"
+        assert finding.validation_confidence == 0.88
 
 
 # ============================================================================
@@ -362,7 +365,7 @@ class TestValidationIntegration:
                     code_evidence="const query = `SELECT * FROM users`;",
                     line_range=(45, 45),
                     explanation="SQL injection confirmed in this query construction.",
-                    evidence_verified_in_file=True,
+                    confidence=0.92,
                 ),
                 FindingValidationResult(
                     finding_id="QUAL-002",
@@ -370,7 +373,7 @@ class TestValidationIntegration:
                     code_evidence="const sanitized = DOMPurify.sanitize(data);",
                     line_range=(23, 26),
                     explanation="Original XSS claim was incorrect - uses DOMPurify.",
-                    evidence_verified_in_file=True,
+                    confidence=0.88,
                 ),
             ],
             new_findings=[],
@@ -406,6 +409,6 @@ class TestValidationIntegration:
                 code_evidence="const x = 1;",
                 line_range=(1, 1),
                 explanation="This is a valid explanation for the finding status.",
-                evidence_verified_in_file=True,
+                confidence=0.85,
             )
             assert result.validation_status == status

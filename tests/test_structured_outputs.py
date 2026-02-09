@@ -223,7 +223,7 @@ class TestOrchestratorFinding:
     """Tests for OrchestratorFinding model."""
 
     def test_valid_finding(self):
-        """Test valid orchestrator finding with evidence field."""
+        """Test valid orchestrator finding."""
         data = {
             "file": "src/api.py",
             "line": 25,
@@ -232,24 +232,40 @@ class TestOrchestratorFinding:
             "category": "quality",
             "severity": "medium",
             "suggestion": "Add error handling with proper logging",
-            "evidence": "def handle_request(req):\n    result = db.query(req.id)  # no try-catch",
+            "confidence": 90,
         }
         result = OrchestratorFinding.model_validate(data)
         assert result.file == "src/api.py"
-        assert result.evidence is not None
-        assert "no try-catch" in result.evidence
+        assert result.confidence == 0.9  # 90 normalized to 0.9
 
-    def test_evidence_optional(self):
-        """Test that evidence field is optional."""
+    def test_confidence_bounds(self):
+        """Test confidence bounds (accepts 0-100 or 0.0-1.0, normalized to 0.0-1.0)."""
+        # Valid min
         data = {
             "file": "test.py",
             "title": "Test",
-            "description": "Test finding",
+            "description": "Test",
             "category": "quality",
             "severity": "low",
+            "confidence": 0,
         }
         result = OrchestratorFinding.model_validate(data)
-        assert result.evidence is None
+        assert result.confidence == 0  # 0 stays as 0
+
+        # Valid max (100% normalized to 1.0)
+        data["confidence"] = 100
+        result = OrchestratorFinding.model_validate(data)
+        assert result.confidence == 1.0  # 100 normalized to 1.0
+
+        # Invalid: over 100 (would normalize to >1.0)
+        data["confidence"] = 101
+        with pytest.raises(ValidationError):
+            OrchestratorFinding.model_validate(data)
+
+        # Invalid: negative
+        data["confidence"] = -1
+        with pytest.raises(ValidationError):
+            OrchestratorFinding.model_validate(data)
 
 
 class TestOrchestratorReviewResponse:
@@ -268,7 +284,7 @@ class TestOrchestratorReviewResponse:
                     "description": "API key exposed in source",
                     "category": "security",
                     "severity": "critical",
-                    "evidence": "API_KEY = 'sk-prod-12345abcdef'",
+                    "confidence": 95,
                 }
             ],
             "summary": "Found 1 critical security issue",
@@ -378,8 +394,8 @@ class TestSecurityFinding:
 class TestDeepAnalysisFinding:
     """Tests for DeepAnalysisFinding model."""
 
-    def test_evidence_field(self):
-        """Test evidence field for proof of issue."""
+    def test_confidence_float(self):
+        """Test confidence is a float between 0 and 1."""
         data = {
             "id": "deep-1",
             "severity": "medium",
@@ -388,10 +404,10 @@ class TestDeepAnalysisFinding:
             "file": "worker.py",
             "line": 100,
             "category": "logic",
-            "evidence": "shared_state += 1  # no lock protection",
+            "confidence": 0.75,
         }
         result = DeepAnalysisFinding.model_validate(data)
-        assert result.evidence == "shared_state += 1  # no lock protection"
+        assert result.confidence == 0.75
 
     def test_verification_note(self):
         """Test verification note field."""

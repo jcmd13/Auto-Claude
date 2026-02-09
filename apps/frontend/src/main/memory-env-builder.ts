@@ -8,7 +8,6 @@
  */
 
 import type { AppSettings } from '../shared/types/settings';
-import { getMemoriesDir } from './config-paths';
 
 /**
  * Build environment variables for memory/Graphiti configuration from app settings.
@@ -26,10 +25,6 @@ export function buildMemoryEnvVars(settings: AppSettings): Record<string, string
 
   // Enable Graphiti
   env.GRAPHITI_ENABLED = 'true';
-
-  // Set database path and name (where LadybugDB stores data)
-  env.GRAPHITI_DB_PATH = getMemoriesDir();
-  env.GRAPHITI_DATABASE = 'auto_claude_memory';
 
   // Set embedder provider (default to ollama)
   const embeddingProvider = settings.memoryEmbeddingProvider || 'ollama';

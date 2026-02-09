@@ -33,21 +33,11 @@ from .filesystem_validators import (
     validate_init_script,
     validate_rm_command,
 )
-from .git_validators import (
-    validate_git_command,
-    validate_git_commit,
-    validate_git_config,
-)
+from .git_validators import validate_git_commit
 from .process_validators import (
     validate_kill_command,
     validate_killall_command,
     validate_pkill_command,
-)
-from .shell_validators import (
-    validate_bash_command,
-    validate_sh_command,
-    validate_shell_c_command,
-    validate_zsh_command,
 )
 from .validation_models import ValidationResult, ValidatorFunction
 from .validator_registry import VALIDATORS, get_validator
@@ -70,13 +60,6 @@ __all__ = [
     "validate_init_script",
     # Git validators
     "validate_git_commit",
-    "validate_git_command",
-    "validate_git_config",
-    # Shell validators
-    "validate_shell_c_command",
-    "validate_bash_command",
-    "validate_sh_command",
-    "validate_zsh_command",
     # Database validators
     "validate_dropdb_command",
     "validate_dropuser_command",

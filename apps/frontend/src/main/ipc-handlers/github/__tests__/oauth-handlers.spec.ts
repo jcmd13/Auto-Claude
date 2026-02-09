@@ -10,15 +10,11 @@ const mockSpawn = vi.fn();
 const mockExecSync = vi.fn();
 const mockExecFileSync = vi.fn();
 
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('child_process')>();
-  return {
-    ...actual,
-    spawn: (...args: unknown[]) => mockSpawn(...args),
-    execSync: (...args: unknown[]) => mockExecSync(...args),
-    execFileSync: (...args: unknown[]) => mockExecFileSync(...args)
-  };
-});
+vi.mock('child_process', () => ({
+  spawn: (...args: unknown[]) => mockSpawn(...args),
+  execSync: (...args: unknown[]) => mockExecSync(...args),
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args)
+}));
 
 // Mock shell.openExternal
 const mockOpenExternal = vi.fn();
@@ -84,13 +80,6 @@ vi.mock('../../../env-utils', () => ({
   findExecutable: mockFindExecutable,
   getAugmentedEnv: mockGetAugmentedEnv,
   isCommandAvailable: vi.fn((cmd: string) => mockFindExecutable(cmd) !== null)
-}));
-
-// Mock cli-tool-manager to avoid child_process import issues
-vi.mock('../../../cli-tool-manager', () => ({
-  getToolPath: vi.fn(() => '/usr/local/bin/gh'),
-  detectCLITools: vi.fn(),
-  getAllToolStatus: vi.fn()
 }));
 
 // Create mock process for spawn

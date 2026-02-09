@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
 import {
   Dialog,
@@ -22,8 +21,6 @@ export function CompetitorAnalysisViewer({
   open,
   onOpenChange,
 }: CompetitorAnalysisViewerProps) {
-  const { t } = useTranslation('common');
-
   if (!analysis) return null;
 
   return (
@@ -69,11 +66,9 @@ export function CompetitorAnalysisViewer({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline flex items-center gap-1 text-sm ml-4"
-                      aria-label={t('accessibility.visitExternalLink', { name: competitor.name })}
                     >
-                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                      <ExternalLink className="h-3 w-3" />
                       Visit
-                      <span className="sr-only">({t('accessibility.opensInNewWindow')})</span>
                     </a>
                   )}
                 </div>

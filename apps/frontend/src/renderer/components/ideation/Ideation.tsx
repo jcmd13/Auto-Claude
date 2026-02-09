@@ -41,7 +41,6 @@ export function Ideation({ projectId, onGoToTask }: IdeationProps) {
     summary,
     activeIdeas,
     selectedIds,
-    convertingIdeas,
     setSelectedIdea,
     setActiveTab,
     setShowConfigDialog,
@@ -218,7 +217,6 @@ export function Ideation({ projectId, onGoToTask }: IdeationProps) {
           onConvert={handleConvertToTask}
           onGoToTask={handleGoToTask}
           onDismiss={handleDismiss}
-          isConverting={convertingIdeas.has(selectedIdea.id)}
         />
       )}
 

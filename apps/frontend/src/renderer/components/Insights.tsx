@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Send,
@@ -16,7 +15,7 @@ import {
   PanelLeftClose,
   PanelLeft
 } from 'lucide-react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -47,40 +46,42 @@ import {
   TASK_COMPLEXITY_COLORS
 } from '../../shared/constants';
 
-// createSafeLink - factory function that creates a SafeLink component with i18n support
-const createSafeLink = (opensInNewWindowText: string) => {
-  return function SafeLink({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
-    // Validate URL - only allow http, https, and relative links
-    const isValidUrl = href && (
-      href.startsWith('http://') ||
-      href.startsWith('https://') ||
-      href.startsWith('/') ||
-      href.startsWith('#')
-    );
+// Safe link renderer for ReactMarkdown to prevent phishing and ensure external links open safely
+const SafeLink = ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  // Validate URL - only allow http, https, and relative links
+  const isValidUrl = href && (
+    href.startsWith('http://') ||
+    href.startsWith('https://') ||
+    href.startsWith('/') ||
+    href.startsWith('#')
+  );
 
-    if (!isValidUrl) {
-      // For invalid or potentially malicious URLs, render as plain text
-      return <span className="text-muted-foreground">{children}</span>;
-    }
+  if (!isValidUrl) {
+    // For invalid or potentially malicious URLs, render as plain text
+    return <span className="text-muted-foreground">{children}</span>;
+  }
 
-    // External links get security attributes and accessibility indicator
-    const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
+  // External links get security attributes
+  const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
 
-    return (
-      <a
-        href={href}
-        {...props}
-        {...(isExternal && {
-          target: '_blank',
-          rel: 'noopener noreferrer',
-        })}
-        className="text-primary hover:underline"
-      >
-        {children}
-        {isExternal && <span className="sr-only"> {opensInNewWindowText}</span>}
-      </a>
-    );
-  };
+  return (
+    <a
+      href={href}
+      {...props}
+      {...(isExternal && {
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      })}
+      className="text-primary hover:underline"
+    >
+      {children}
+    </a>
+  );
+};
+
+// Markdown components with safe link rendering
+const markdownComponents = {
+  a: SafeLink,
 };
 
 interface InsightsProps {
@@ -88,18 +89,12 @@ interface InsightsProps {
 }
 
 export function Insights({ projectId }: InsightsProps) {
-  const { t } = useTranslation('common');
   const session = useInsightsStore((state) => state.session);
   const sessions = useInsightsStore((state) => state.sessions);
   const status = useInsightsStore((state) => state.status);
   const streamingContent = useInsightsStore((state) => state.streamingContent);
   const currentTool = useInsightsStore((state) => state.currentTool);
   const isLoadingSessions = useInsightsStore((state) => state.isLoadingSessions);
-
-  // Create markdown components with translated accessibility text
-  const markdownComponents = useMemo(() => ({
-    a: createSafeLink(t('accessibility.opensInNewWindow')),
-  }), [t]);
 
   const [inputValue, setInputValue] = useState('');
   const [creatingTask, setCreatingTask] = useState<string | null>(null);
@@ -300,7 +295,6 @@ export function Insights({ projectId }: InsightsProps) {
               <MessageBubble
                 key={message.id}
                 message={message}
-                markdownComponents={markdownComponents}
                 onCreateTask={() => handleCreateTask(message)}
                 isCreatingTask={creatingTask === message.id}
                 taskCreated={taskCreated.has(message.id)}
@@ -393,7 +387,6 @@ export function Insights({ projectId }: InsightsProps) {
 
 interface MessageBubbleProps {
   message: InsightsChatMessage;
-  markdownComponents: Components;
   onCreateTask: () => void;
   isCreatingTask: boolean;
   taskCreated: boolean;
@@ -401,7 +394,6 @@ interface MessageBubbleProps {
 
 function MessageBubble({
   message,
-  markdownComponents,
   onCreateTask,
   isCreatingTask,
   taskCreated

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   ChevronRight,
   Lightbulb,
@@ -32,7 +31,6 @@ export function FeatureDetailPanel({
   onDelete,
   competitorInsights = [],
 }: FeatureDetailPanelProps) {
-  const { t } = useTranslation('common');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDelete = () => {
@@ -71,11 +69,10 @@ export function FeatureDetailPanel({
                 e.stopPropagation();
                 setShowDeleteConfirm(true);
               }}
-              aria-label={t('accessibility.deleteFeatureAriaLabel')}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t('accessibility.closeFeatureDetailsAriaLabel')}>
+            <Button type="button" variant="ghost" size="icon" onClick={onClose}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

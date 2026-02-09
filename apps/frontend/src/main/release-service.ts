@@ -344,12 +344,16 @@ export class ReleaseService extends EventEmitter {
     tasks: Task[]
   ): Promise<UnmergedWorktreeInfo[]> {
     const unmerged: UnmergedWorktreeInfo[] = [];
-    const worktreesDir = path.join(projectPath, '.auto-claude', 'worktrees', 'tasks');
+
+    // Get worktrees directory
+    const worktreesDir = path.join(projectPath, '.worktrees', 'auto-claude');
 
     if (!existsSync(worktreesDir)) {
+      // No worktrees exist at all - all clear
       return [];
     }
 
+    // List all spec worktrees
     let worktreeFolders: string[];
     try {
       worktreeFolders = readdirSync(worktreesDir, { withFileTypes: true })
@@ -362,16 +366,17 @@ export class ReleaseService extends EventEmitter {
     // Check each spec ID that's in this release
     for (const specId of releaseSpecIds) {
       // Find the worktree folder for this spec
-      const matchingFolder = worktreeFolders.find(folder =>
+      // Spec IDs are like "001-feature-name", worktree folders match
+      const worktreeFolder = worktreeFolders.find(folder =>
         folder === specId || folder.startsWith(`${specId}-`)
       );
 
-      if (!matchingFolder) {
+      if (!worktreeFolder) {
         // No worktree for this spec - it's already merged/cleaned up
         continue;
       }
 
-      const worktreePath = path.join(worktreesDir, matchingFolder);
+      const worktreePath = path.join(worktreesDir, worktreeFolder);
 
       // Get the task info for better error messages
       const task = tasks.find(t => t.specId === specId);

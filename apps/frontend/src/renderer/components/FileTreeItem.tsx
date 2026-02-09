@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect, type DragEvent, type KeyboardEvent } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState, useRef, useEffect, type DragEvent } from 'react';
 import { ChevronRight, ChevronDown, Folder, File, FileCode, FileJson, FileText, FileImage, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { FileNode } from '../../shared/types';
@@ -71,7 +70,6 @@ export function FileTreeItem({
   isLoading,
   onToggle,
 }: FileTreeItemProps) {
-  const { t } = useTranslation('common');
   const [isDragging, setIsDragging] = useState(false);
   const dragImageRef = useRef<HTMLDivElement | null>(null);
 
@@ -97,16 +95,6 @@ export function FileTreeItem({
     e.stopPropagation();
     if (node.isDirectory) {
       onToggle();
-    }
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (node.isDirectory) {
-        onToggle();
-      }
     }
   };
 
@@ -159,47 +147,37 @@ export function FileTreeItem({
 
   return (
     <div
-      role={node.isDirectory ? 'button' : undefined}
-      tabIndex={node.isDirectory ? 0 : undefined}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onKeyDown={node.isDirectory ? handleKeyDown : undefined}
       className={cn(
         'flex items-center gap-1 py-1 px-2 rounded cursor-grab select-none',
         'hover:bg-accent/50 transition-colors',
-        node.isDirectory && 'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
         isDragging && 'opacity-50 bg-accent ring-2 ring-primary'
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      aria-label={node.isDirectory ? t('accessibility.toggleFolder', { name: node.name }) : undefined}
-      aria-expanded={node.isDirectory ? isExpanded : undefined}
     >
       {/* Expand/collapse chevron for directories */}
       {node.isDirectory ? (
         <button
-          type="button"
           className="flex items-center justify-center w-4 h-4 hover:bg-accent rounded"
           onClick={(e) => {
             e.stopPropagation();
             onToggle();
           }}
-          aria-label={isExpanded ? t('accessibility.collapseFolder', { name: node.name }) : t('accessibility.expandFolder', { name: node.name })}
-          aria-expanded={isExpanded}
-          tabIndex={-1}
         >
           {isLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" aria-hidden="true" />
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
           ) : isExpanded ? (
-            <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
           ) : (
-            <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
           )}
         </button>
       ) : (
-        <span className="w-4" aria-hidden="true" />
+        <span className="w-4" />
       )}
 
       {/* Icon */}

@@ -1,10 +1,6 @@
-import { useEffect, useCallback, useMemo } from "react";
-import {
-  useGitLabStore,
-  loadGitLabIssues,
-  checkGitLabConnection,
-} from "../../../stores/gitlab-store";
-import type { FilterState } from "../types";
+import { useEffect, useCallback } from 'react';
+import { useGitLabStore, loadGitLabIssues, checkGitLabConnection } from '../../../stores/gitlab-store';
+import type { FilterState } from '../types';
 
 export function useGitLabIssues(projectId: string | undefined) {
   const {
@@ -17,7 +13,7 @@ export function useGitLabIssues(projectId: string | undefined) {
     selectIssue,
     setFilterState,
     getFilteredIssues,
-    getOpenIssuesCount,
+    getOpenIssuesCount
   } = useGitLabStore();
 
   // Always check connection when component mounts or projectId changes
@@ -43,20 +39,12 @@ export function useGitLabIssues(projectId: string | undefined) {
     }
   }, [projectId, filterState]);
 
-  const handleFilterChange = useCallback(
-    (state: FilterState) => {
-      setFilterState(state);
-      if (projectId) {
-        loadGitLabIssues(projectId, state);
-      }
-    },
-    [projectId, setFilterState]
-  );
-
-  // Compute selectedIssue from issues array
-  const selectedIssue = useMemo(() => {
-    return issues.find((i) => i.iid === selectedIssueIid) || null;
-  }, [issues, selectedIssueIid]);
+  const handleFilterChange = useCallback((state: FilterState) => {
+    setFilterState(state);
+    if (projectId) {
+      loadGitLabIssues(projectId, state);
+    }
+  }, [projectId, setFilterState]);
 
   return {
     issues,
@@ -64,12 +52,11 @@ export function useGitLabIssues(projectId: string | undefined) {
     isLoading,
     error,
     selectedIssueIid,
-    selectedIssue,
     filterState,
     selectIssue,
     getFilteredIssues,
     getOpenIssuesCount,
     handleRefresh,
-    handleFilterChange,
+    handleFilterChange
   };
 }

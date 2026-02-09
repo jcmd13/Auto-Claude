@@ -154,7 +154,7 @@ export class SpecNumberLock {
     maxNumber = Math.max(maxNumber, this.scanSpecsDir(mainSpecsDir));
 
     // 2. Scan all worktree specs
-    const worktreesDir = path.join(this.projectDir, '.auto-claude', 'worktrees', 'tasks');
+    const worktreesDir = path.join(this.projectDir, '.worktrees');
     if (existsSync(worktreesDir)) {
       try {
         const worktrees = readdirSync(worktreesDir, { withFileTypes: true });

@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { ExternalLink, Play, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -46,7 +45,6 @@ interface IdeaCardProps {
 }
 
 export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onDismiss, onToggleSelect }: IdeaCardProps) {
-  const { t } = useTranslation('common');
   const isDismissed = idea.status === 'dismissed';
   const isArchived = idea.status === 'archived';
   const isConverted = idea.status === 'converted';
@@ -72,7 +70,6 @@ export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onD
             checked={isSelected}
             onCheckedChange={() => onToggleSelect(idea.id)}
             className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-            aria-label={t('accessibility.selectIdeaAriaLabel', { title: idea.title })}
           />
         </div>
 
@@ -137,12 +134,11 @@ export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onD
                       e.stopPropagation();
                       onConvert(idea);
                     }}
-                    aria-label={t('accessibility.convertToTaskAriaLabel')}
                   >
                     <Play className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t('accessibility.convertToTaskAriaLabel')}</TooltipContent>
+                <TooltipContent>Convert to Task</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -154,12 +150,11 @@ export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onD
                       e.stopPropagation();
                       onDismiss(idea);
                     }}
-                    aria-label={t('accessibility.dismissAriaLabel')}
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t('accessibility.dismissAriaLabel')}</TooltipContent>
+                <TooltipContent>Dismiss</TooltipContent>
               </Tooltip>
             </div>
           )}
@@ -176,12 +171,11 @@ export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onD
                       e.stopPropagation();
                       onGoToTask(idea.taskId!);
                     }}
-                    aria-label={t('accessibility.goToTaskAriaLabel')}
                   >
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t('accessibility.goToTaskAriaLabel')}</TooltipContent>
+                <TooltipContent>Go to Task</TooltipContent>
               </Tooltip>
             </div>
           )}
@@ -198,12 +192,11 @@ export function IdeaCard({ idea, isSelected, onClick, onConvert, onGoToTask, onD
                       e.stopPropagation();
                       onGoToTask(idea.taskId!);
                     }}
-                    aria-label={t('accessibility.goToTaskAriaLabel')}
                   >
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t('accessibility.goToTaskAriaLabel')}</TooltipContent>
+                <TooltipContent>Go to Task</TooltipContent>
               </Tooltip>
             </div>
           )}

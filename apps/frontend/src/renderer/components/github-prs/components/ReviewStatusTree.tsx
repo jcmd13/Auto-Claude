@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, Circle, CircleDot, Play, RefreshCw } from 'lucide-react';
+import { CheckCircle, Circle, CircleDot, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../ui/button';
 import { cn } from '../../../lib/utils';
@@ -15,13 +15,11 @@ export type ReviewStatus =
   | 'ready_to_merge'
   | 'needs_attention'
   | 'ready_for_followup'
-  | 'followup_issues_remain'
-  | 'reviewing';
+  | 'followup_issues_remain';
 
 export interface ReviewStatusTreeProps {
   status: ReviewStatus;
   isReviewing: boolean;
-  startedAt: string | null;
   reviewResult: PRReviewResult | null;
   previousReviewResult: PRReviewResult | null;
   postedCount: number;
@@ -39,7 +37,6 @@ export interface ReviewStatusTreeProps {
 export function ReviewStatusTree({
   status,
   isReviewing,
-  startedAt,
   reviewResult,
   previousReviewResult,
   postedCount,
@@ -130,7 +127,7 @@ export function ReviewStatusTree({
       id: 'start',
       label: t('prReview.reviewStarted'),
       status: 'completed',
-      date: startedAt || reviewResult?.reviewedAt || new Date().toISOString()
+      date: reviewResult?.reviewedAt || new Date().toISOString()
     });
 
     // Step 2: AI Analysis
@@ -146,18 +143,7 @@ export function ReviewStatusTree({
         id: 'analysis',
         label: t('prReview.analysisComplete', { count: reviewResult.findings.length }),
         status: 'completed',
-        date: reviewResult.reviewedAt,
-        action: (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onRunReview}
-            className="ml-2 h-6 text-xs px-2 text-muted-foreground hover:text-foreground"
-            title={t('prReview.rerunReview')}
-          >
-            <RefreshCw className="h-3 w-3" />
-          </Button>
-        )
+        date: reviewResult.reviewedAt
       });
     }
 

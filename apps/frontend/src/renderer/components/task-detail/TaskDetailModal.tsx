@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useToast } from '../../hooks/use-toast';
 import { Separator } from '../ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
@@ -27,12 +26,11 @@ import {
   Loader2,
   AlertTriangle,
   Pencil,
-  X,
-  GitPullRequest
+  X
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { calculateProgress } from '../../lib/utils';
-import { startTask, stopTask, submitReview, recoverStuckTask, deleteTask, useTaskStore } from '../../stores/task-store';
+import { startTask, stopTask, submitReview, recoverStuckTask, deleteTask } from '../../stores/task-store';
 import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
 import { useTaskDetail } from './hooks/useTaskDetail';
@@ -42,7 +40,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
-import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
+import type { Task } from '../../../shared/types';
 
 interface TaskDetailModalProps {
   open: boolean;
@@ -78,7 +76,6 @@ const isFilesTabEnabled = () => {
 // Separate component to use hooks only when task exists
 function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void }) {
   const { t } = useTranslation(['tasks']);
-  const { toast } = useToast();
   const state = useTaskDetail({ task });
   const showFilesTab = isFilesTabEnabled();
   const progressPercent = calculateProgress(task.subtasks);
@@ -86,23 +83,10 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   const totalSubtasks = task.subtasks.length;
 
   // Event Handlers
-  const handleStartStop = async () => {
+  const handleStartStop = () => {
     if (state.isRunning && !state.isStuck) {
       stopTask(task.id);
     } else {
-      // If task is incomplete, validate and reload plan before starting
-      if (state.isIncomplete) {
-        const isValid = await state.reloadPlanForIncompleteTask();
-        if (!isValid) {
-          toast({
-            title: 'Cannot Resume Task',
-            description: 'Failed to load implementation plan. Please try again or check the task files.',
-            variant: 'destructive',
-            duration: 5000,
-          });
-          return;
-        }
-      }
       startTask(task.id);
     }
   };
@@ -118,15 +102,13 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   };
 
   const handleReject = async () => {
-    // Allow submission if there's text feedback OR images attached
-    if (!state.feedback.trim() && state.feedbackImages.length === 0) {
+    if (!state.feedback.trim()) {
       return;
     }
     state.setIsSubmitting(true);
-    await submitReview(task.id, false, state.feedback, state.feedbackImages);
+    await submitReview(task.id, false, state.feedback);
     state.setIsSubmitting(false);
     state.setFeedback('');
-    state.setFeedbackImages([]);
   };
 
   const handleDelete = async () => {
@@ -179,56 +161,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
     state.setIsDiscarding(false);
   };
 
-  const handleCreatePR = async (options: WorktreeCreatePROptions) => {
-    state.setIsCreatingPR(true);
-    try {
-      const result = await window.electronAPI.createWorktreePR(task.id, options);
-      if (result.success && result.data) {
-        // Update single task in store with new status and prUrl (more efficient than reloading all tasks)
-        if (result.data.success && result.data.prUrl && !result.data.alreadyExists) {
-          useTaskStore.getState().updateTask(task.id, {
-            status: 'pr_created',
-            metadata: { ...task.metadata, prUrl: result.data.prUrl }
-          });
-        }
-        return result.data;
-      }
-      // Propagate IPC error; let CreatePRDialog use its i18n fallback
-      return { success: false, error: result.error, prUrl: undefined, alreadyExists: false };
-    } catch (error) {
-      // Propagate actual error message; let CreatePRDialog handle i18n fallback for undefined
-      return { success: false, error: error instanceof Error ? error.message : undefined, prUrl: undefined, alreadyExists: false };
-    } finally {
-      state.setIsCreatingPR(false);
-    }
-  };
-
   const handleClose = () => {
-    // Show toast notification if task is running
-    if (state.isRunning && !state.isStuck) {
-      toast({
-        title: t('tasks:notifications.backgroundTaskTitle'),
-        description: t('tasks:notifications.backgroundTaskDescription'),
-        duration: 4000,
-      });
-    }
     onOpenChange(false);
-  };
-
-  // Helper function to get status badge variant
-  const getStatusBadgeVariant = (status: string, isStuck: boolean) => {
-    if (isStuck) return 'warning';
-    switch (status) {
-      case 'done':
-      case 'pr_created':
-        return 'success';
-      case 'human_review':
-        return 'purple';
-      case 'in_progress':
-        return 'info';
-      default:
-        return 'secondary';
-    }
   };
 
   // Render primary action button based on state
@@ -257,18 +191,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
     if (state.isIncomplete) {
       return (
-        <Button variant="default" onClick={handleStartStop} disabled={state.isLoadingPlan}>
-          {state.isLoadingPlan ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Plan...
-            </>
-          ) : (
-            <>
-              <Play className="mr-2 h-4 w-4" />
-              Resume Task
-            </>
-          )}
+        <Button variant="default" onClick={handleStartStop}>
+          <Play className="mr-2 h-4 w-4" />
+          Resume Task
         </Button>
       );
     }
@@ -298,28 +223,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       return (
         <div className="completion-state text-sm flex items-center gap-2 text-success">
           <CheckCircle2 className="h-5 w-5" />
-          <span className="font-medium">{t('tasks:status.complete')}</span>
-        </div>
-      );
-    }
-
-    if (task.status === 'pr_created') {
-      return (
-        <div className="flex items-center gap-4">
-          <div className="completion-state text-sm flex items-center gap-2 text-success">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="font-medium">{t('tasks:status.complete')}</span>
-          </div>
-           {task.metadata?.prUrl && (
-             <button
-               type="button"
-               onClick={() => window.electronAPI?.openExternal(task.metadata!.prUrl!)}
-               className="completion-state text-sm flex items-center gap-2 text-info cursor-pointer hover:underline bg-transparent border-none p-0"
-             >
-              <GitPullRequest className="h-5 w-5" />
-              <span className="font-medium">{t(TASK_STATUS_LABELS[task.status])}</span>
-            </button>
-          )}
+          <span className="font-medium">Task completed</span>
         </div>
       );
     }
@@ -381,12 +285,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                         </>
                       ) : (
                         <>
-                           <Badge
-                             variant={getStatusBadgeVariant(task.status, state.isStuck)}
-                             className={cn('text-xs', (task.status === 'in_progress' && !state.isStuck) && 'status-running')}
-                           >
-                             {t(TASK_STATUS_LABELS[task.status])}
-                           </Badge>
+                          <Badge
+                            variant={task.status === 'done' ? 'success' : task.status === 'human_review' ? 'purple' : task.status === 'in_progress' ? 'info' : 'secondary'}
+                            className={cn('text-xs', (task.status === 'in_progress' && !state.isStuck) && 'status-running')}
+                          >
+                            {TASK_STATUS_LABELS[task.status]}
+                          </Badge>
                           {task.status === 'human_review' && task.reviewReason && (
                             <Badge
                               variant={task.reviewReason === 'completed' ? 'success' : task.reviewReason === 'errors' ? 'destructive' : 'warning'}
@@ -489,7 +393,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 {/* Overview Tab */}
                 <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden mt-0">
                   <ScrollArea className="h-full">
-                    <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
+                    <div className="p-5 space-y-5">
                       {/* Metadata */}
                       <TaskMetadata task={task} />
 
@@ -518,8 +422,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                             showConflictDialog={state.showConflictDialog}
                             onFeedbackChange={state.setFeedback}
                             onReject={handleReject}
-                            images={state.feedbackImages}
-                            onImagesChange={state.setFeedbackImages}
                             onMerge={handleMerge}
                             onDiscard={handleDiscard}
                             onShowDiscardDialog={state.setShowDiscardDialog}
@@ -530,11 +432,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                             onClose={handleClose}
                             onSwitchToTerminals={onSwitchToTerminals}
                             onOpenInbuiltTerminal={onOpenInbuiltTerminal}
-                            onReviewAgain={state.handleReviewAgain}
-                            showPRDialog={state.showPRDialog}
-                            isCreatingPR={state.isCreatingPR}
-                            onShowPRDialog={state.setShowPRDialog}
-                            onCreatePR={handleCreatePR}
                           />
                         </>
                       )}

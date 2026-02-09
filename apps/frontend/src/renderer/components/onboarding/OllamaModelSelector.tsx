@@ -165,40 +165,29 @@ export function OllamaModelSelector({
       if (abortSignal?.aborted) return;
 
       if (result?.success && result?.data?.embedding_models) {
-        // Build a set of installed model names (full, base, and version-matched)
+        // Build a set of installed model names (both full name and normalized)
         const installedFullNames = new Set<string>();
         const installedBaseNames = new Set<string>();
-        const installedVersionNames = new Set<string>();
 
         result.data.embedding_models.forEach((m: { name: string }) => {
           const name = m.name;
           installedFullNames.add(name);
-
-          // Normalize :latest suffix
+          // Only normalize :latest suffix, not version tags like :4b, :8b, :0.6b
           if (name.endsWith(':latest')) {
             installedBaseNames.add(name.replace(':latest', ''));
           } else if (!name.includes(':')) {
             installedBaseNames.add(name);
-          }
-
-          // Handle quantization variants (e.g., qwen3-embedding:8b-q4_K_M)
-          // Extract base:version without quantization suffix
-          const quantMatch = name.match(/^([^:]+:[^-]+)/);
-          if (quantMatch) {
-            installedVersionNames.add(quantMatch[1]);
           }
         });
 
         // Update models with installation status
         setModels(
           RECOMMENDED_MODELS.map(model => {
-            // Check multiple matching strategies:
-            // 1. Exact match (e.g., "qwen3-embedding:8b" === "qwen3-embedding:8b")
-            // 2. Base name match for :latest normalization (handles "embeddinggemma" matching "embeddinggemma:latest")
-            // 3. Version match ignoring quantization suffix (e.g., "qwen3-embedding:8b" matches "qwen3-embedding:8b-q4_K_M")
+            // Check exact match first, then base name (for :latest normalization)
             const isInstalled = installedFullNames.has(model.name) ||
               installedBaseNames.has(model.name) ||
-              installedVersionNames.has(model.name);
+              // Also check if model without tag is installed (e.g., "embeddinggemma" matches "embeddinggemma")
+              (model.name.includes(':') ? false : installedFullNames.has(model.name + ':latest'));
             return {
               ...model,
               installed: isInstalled,
@@ -292,22 +281,15 @@ export function OllamaModelSelector({
    };
 
    /**
-    * Handles model selection with toggle behavior.
-    * Clicking an already-selected model will deselect it.
+    * Handles model selection by calling the parent callback.
     * Only allows selection of installed models and when component is not disabled.
     *
-    * @param {OllamaModel} model - The model to select or deselect
+    * @param {OllamaModel} model - The model to select
     * @returns {void}
     */
    const handleSelect = (model: OllamaModel) => {
      if (!model.installed || disabled) return;
-
-     // Toggle behavior: if already selected, deselect by passing empty values
-     if (selectedModel === model.name) {
-       onModelSelect('', 0);
-     } else {
-       onModelSelect(model.name, model.dim);
-     }
+     onModelSelect(model.name, model.dim);
    };
 
   if (isLoading) {

@@ -11,8 +11,7 @@ const mockIpcRenderer = {
   on: vi.fn(),
   once: vi.fn(),
   removeListener: vi.fn(),
-  removeAllListeners: vi.fn(),
-  setMaxListeners: vi.fn()
+  removeAllListeners: vi.fn()
 };
 
 // Mock contextBridge
@@ -148,8 +147,7 @@ describe('IPC Bridge Integration', () => {
         const submitReview = electronAPI['submitReview'] as (
           id: string,
           approved: boolean,
-          feedback?: string,
-          images?: unknown[]
+          feedback?: string
         ) => Promise<unknown>;
         await submitReview('task-id', false, 'Needs more work');
 
@@ -157,8 +155,7 @@ describe('IPC Bridge Integration', () => {
           'task:review',
           'task-id',
           false,
-          'Needs more work',
-          undefined
+          'Needs more work'
         );
       });
     });

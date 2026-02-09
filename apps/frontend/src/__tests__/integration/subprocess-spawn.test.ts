@@ -30,23 +30,16 @@ const mockProcess = Object.assign(new EventEmitter(), {
   })
 });
 
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('child_process')>();
-  return {
-    ...actual,
-    spawn: vi.fn(() => mockProcess)
-  };
-});
+vi.mock('child_process', () => ({
+  spawn: vi.fn(() => mockProcess)
+}));
 
 // Mock claude-profile-manager to bypass auth checks in tests
-const mockProfileManager = {
-  hasValidAuth: () => true,
-  getActiveProfile: () => ({ profileId: 'default', profileName: 'Default' })
-};
-
 vi.mock('../../main/claude-profile-manager', () => ({
-  getClaudeProfileManager: () => mockProfileManager,
-  initializeClaudeProfileManager: () => Promise.resolve(mockProfileManager)
+  getClaudeProfileManager: () => ({
+    hasValidAuth: () => true,
+    getActiveProfile: () => ({ profileId: 'default', profileName: 'Default' })
+  })
 }));
 
 // Mock validatePythonPath to allow test paths (security validation is tested separately)
@@ -114,7 +107,7 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test task description');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test task description');
 
       expect(spawn).toHaveBeenCalledWith(
         EXPECTED_PYTHON_COMMAND,
@@ -139,7 +132,7 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startTaskExecution('task-1', TEST_PROJECT_PATH, 'spec-001');
+      manager.startTaskExecution('task-1', TEST_PROJECT_PATH, 'spec-001');
 
       expect(spawn).toHaveBeenCalledWith(
         EXPECTED_PYTHON_COMMAND,
@@ -161,7 +154,7 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startQAProcess('task-1', TEST_PROJECT_PATH, 'spec-001');
+      manager.startQAProcess('task-1', TEST_PROJECT_PATH, 'spec-001');
 
       expect(spawn).toHaveBeenCalledWith(
         EXPECTED_PYTHON_COMMAND,
@@ -185,7 +178,7 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startTaskExecution('task-1', TEST_PROJECT_PATH, 'spec-001', {
+      manager.startTaskExecution('task-1', TEST_PROJECT_PATH, 'spec-001', {
         parallel: true,
         workers: 4
       });
@@ -211,7 +204,7 @@ describe('Subprocess Spawn Integration', () => {
       const logHandler = vi.fn();
       manager.on('log', logHandler);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       // Simulate stdout data (must include newline for buffered output processing)
       mockStdout.emit('data', Buffer.from('Test log output\n'));
@@ -227,7 +220,7 @@ describe('Subprocess Spawn Integration', () => {
       const logHandler = vi.fn();
       manager.on('log', logHandler);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       // Simulate stderr data (must include newline for buffered output processing)
       mockStderr.emit('data', Buffer.from('Progress: 50%\n'));
@@ -243,7 +236,7 @@ describe('Subprocess Spawn Integration', () => {
       const exitHandler = vi.fn();
       manager.on('exit', exitHandler);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       // Simulate process exit
       mockProcess.emit('exit', 0);
@@ -260,7 +253,7 @@ describe('Subprocess Spawn Integration', () => {
       const errorHandler = vi.fn();
       manager.on('error', errorHandler);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       // Simulate process error
       mockProcess.emit('error', new Error('Spawn failed'));
@@ -273,7 +266,7 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       expect(manager.isRunning('task-1')).toBe(true);
 
@@ -300,12 +293,12 @@ describe('Subprocess Spawn Integration', () => {
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
       expect(manager.getRunningTasks()).toHaveLength(0);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
       expect(manager.getRunningTasks()).toContain('task-1');
 
-      await manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
+      manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
       expect(manager.getRunningTasks()).toHaveLength(2);
-    }, 15000);
+    });
 
     it('should use configured Python path', async () => {
       const { spawn } = await import('child_process');
@@ -314,7 +307,7 @@ describe('Subprocess Spawn Integration', () => {
       const manager = new AgentManager();
       manager.configure('/custom/python3', AUTO_CLAUDE_SOURCE);
 
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test');
 
       expect(spawn).toHaveBeenCalledWith(
         '/custom/python3',
@@ -328,8 +321,8 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
-      await manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
+      manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
 
       await manager.killAll();
 
@@ -341,10 +334,10 @@ describe('Subprocess Spawn Integration', () => {
 
       const manager = new AgentManager();
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
 
       // Start another process for same task
-      await manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 2');
+      manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 2');
 
       // Should have killed the first one
       expect(mockProcess.kill).toHaveBeenCalled();

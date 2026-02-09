@@ -21,7 +21,6 @@ import path from 'path';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { TaskStatus, Project, Task } from '../../../shared/types';
-import { projectStore } from '../../project-store';
 
 // In-memory locks for plan file operations
 // Key: plan file path, Value: Promise chain for serializing operations
@@ -81,8 +80,6 @@ export function mapStatusToPlanStatus(status: TaskStatus): string {
     case 'ai_review':
     case 'human_review':
       return 'review';
-    case 'pr_created':
-      return 'pr_created';
     case 'done':
       return 'completed';
     default:
@@ -96,13 +93,11 @@ export function mapStatusToPlanStatus(status: TaskStatus): string {
  *
  * @param planPath - Path to the implementation_plan.json file
  * @param status - The TaskStatus to persist
- * @param projectId - Optional project ID to invalidate cache (recommended for performance)
  * @returns true if status was persisted, false if plan file doesn't exist
  */
-export async function persistPlanStatus(planPath: string, status: TaskStatus, projectId?: string): Promise<boolean> {
+export async function persistPlanStatus(planPath: string, status: TaskStatus): Promise<boolean> {
   return withPlanLock(planPath, async () => {
     try {
-      console.warn(`[plan-file-utils] Reading implementation_plan.json to update status to: ${status}`, { planPath });
       // Read file directly without existence check to avoid TOCTOU race condition
       const planContent = readFileSync(planPath, 'utf-8');
       const plan = JSON.parse(planContent);
@@ -112,18 +107,10 @@ export async function persistPlanStatus(planPath: string, status: TaskStatus, pr
       plan.updated_at = new Date().toISOString();
 
       writeFileSync(planPath, JSON.stringify(plan, null, 2));
-      console.warn(`[plan-file-utils] Successfully persisted status: ${status} to implementation_plan.json`);
-
-      // Invalidate tasks cache since status changed
-      if (projectId) {
-        projectStore.invalidateTasksCache(projectId);
-      }
-
       return true;
     } catch (err) {
       // File not found is expected - return false
       if (isFileNotFoundError(err)) {
-        console.warn(`[plan-file-utils] implementation_plan.json not found at ${planPath} - status not persisted`);
         return false;
       }
       console.warn(`[plan-file-utils] Could not persist status to ${planPath}:`, err);
@@ -154,10 +141,9 @@ export async function persistPlanStatus(planPath: string, status: TaskStatus, pr
  *
  * @param planPath - Path to the implementation_plan.json file
  * @param status - The TaskStatus to persist
- * @param projectId - Optional project ID to invalidate cache (recommended for performance)
  * @returns true if status was persisted, false otherwise
  */
-export function persistPlanStatusSync(planPath: string, status: TaskStatus, projectId?: string): boolean {
+export function persistPlanStatusSync(planPath: string, status: TaskStatus): boolean {
   try {
     // Read file directly without existence check to avoid TOCTOU race condition
     const planContent = readFileSync(planPath, 'utf-8');
@@ -168,12 +154,6 @@ export function persistPlanStatusSync(planPath: string, status: TaskStatus, proj
     plan.updated_at = new Date().toISOString();
 
     writeFileSync(planPath, JSON.stringify(plan, null, 2));
-
-    // Invalidate tasks cache since status changed
-    if (projectId) {
-      projectStore.invalidateTasksCache(projectId);
-    }
-
     return true;
   } catch (err) {
     // File not found is expected - return false
@@ -198,7 +178,6 @@ export async function updatePlanFile<T extends Record<string, unknown>>(
 ): Promise<T | null> {
   return withPlanLock(planPath, async () => {
     try {
-      console.warn(`[plan-file-utils] Reading implementation_plan.json for update`, { planPath });
       // Read file directly without existence check to avoid TOCTOU race condition
       const planContent = readFileSync(planPath, 'utf-8');
       const plan = JSON.parse(planContent) as T;
@@ -208,12 +187,10 @@ export async function updatePlanFile<T extends Record<string, unknown>>(
       (updatedPlan as Record<string, unknown>).updated_at = new Date().toISOString();
 
       writeFileSync(planPath, JSON.stringify(updatedPlan, null, 2));
-      console.warn(`[plan-file-utils] Successfully updated implementation_plan.json`);
       return updatedPlan;
     } catch (err) {
       // File not found is expected - return null
       if (isFileNotFoundError(err)) {
-        console.warn(`[plan-file-utils] implementation_plan.json not found at ${planPath} - update skipped`);
         return null;
       }
       console.warn(`[plan-file-utils] Could not update plan at ${planPath}:`, err);
@@ -269,42 +246,4 @@ export async function createPlanIfNotExists(
 
     writeFileSync(planPath, JSON.stringify(plan, null, 2));
   });
-}
-
-/**
- * Update task_metadata.json to add PR URL.
- * This is a simple JSON file update (no locking needed as it's rarely updated concurrently).
- *
- * @param metadataPath - Path to the task_metadata.json file
- * @param prUrl - The PR URL to add to metadata
- * @returns true if metadata was updated, false if file doesn't exist or failed
- */
-export function updateTaskMetadataPrUrl(metadataPath: string, prUrl: string): boolean {
-  try {
-    let metadata: Record<string, unknown> = {};
-
-    // Try to read existing metadata
-    try {
-      const content = readFileSync(metadataPath, 'utf-8');
-      metadata = JSON.parse(content);
-    } catch (err) {
-      if (!isFileNotFoundError(err)) {
-        throw err;
-      }
-      // File doesn't exist, will create new one
-    }
-
-    // Update with prUrl
-    metadata.prUrl = prUrl;
-
-    // Ensure parent directory exists before writing
-    mkdirSync(path.dirname(metadataPath), { recursive: true });
-
-    // Write back
-    writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
-    return true;
-  } catch (err) {
-    console.warn(`[plan-file-utils] Could not update metadata at ${metadataPath}:`, err);
-    return false;
-  }
 }

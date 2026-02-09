@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { ExternalLink, User, Clock, MessageCircle, Sparkles, CheckCircle2, Eye } from 'lucide-react';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -23,7 +22,6 @@ export function IssueDetail({
   autoFixConfig,
   autoFixQueueItem,
 }: IssueDetailProps) {
-  const { t } = useTranslation('common');
   // Determine which task ID to use - either already linked or just created
   const taskId = linkedTaskId || (investigationResult?.success ? investigationResult.taskId : undefined);
   const hasLinkedTask = !!taskId;
@@ -49,7 +47,7 @@ export function IssueDetail({
               </Badge>
               <span className="text-sm text-muted-foreground">#{issue.number}</span>
             </div>
-            <Button variant="ghost" size="icon" asChild aria-label={t('accessibility.openOnGitHubAriaLabel')}>
+            <Button variant="ghost" size="icon" asChild>
               <a href={issue.htmlUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" />
               </a>

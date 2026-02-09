@@ -1,9 +1,9 @@
 import { spawn } from 'child_process';
+import * as path from 'path';
 import * as os from 'os';
 import type { GitCommit } from '../../shared/types';
 import { getProfileEnv } from '../rate-limit-detector';
 import { parsePythonCommand } from '../python-detector';
-import { getAugmentedEnv } from '../env-utils';
 
 interface VersionSuggestion {
   version: string;
@@ -215,19 +215,31 @@ except Exception as e:
     const homeDir = os.homedir();
     const isWindows = process.platform === 'win32';
 
-    // Use getAugmentedEnv() to ensure common tool paths are available
-    // even when app is launched from Finder/Dock
-    const augmentedEnv = getAugmentedEnv();
+    // Build PATH with platform-appropriate separator and locations
+    const pathAdditions = isWindows
+      ? [
+          path.join(homeDir, 'AppData', 'Local', 'Programs', 'claude'),
+          path.join(homeDir, 'AppData', 'Roaming', 'npm'),
+          path.join(homeDir, '.local', 'bin'),
+          'C:\\Program Files\\Claude',
+          'C:\\Program Files (x86)\\Claude'
+        ]
+      : [
+          '/usr/local/bin',
+          '/opt/homebrew/bin',
+          path.join(homeDir, '.local', 'bin'),
+          path.join(homeDir, 'bin')
+        ];
 
     // Get active Claude profile environment
     const profileEnv = getProfileEnv();
 
     const spawnEnv: Record<string, string> = {
-      ...augmentedEnv,
+      ...process.env as Record<string, string>,
       ...profileEnv,
-      // Ensure critical env vars are set for claude CLI
       ...(isWindows ? { USERPROFILE: homeDir } : { HOME: homeDir }),
       USER: process.env.USER || process.env.USERNAME || 'user',
+      PATH: [process.env.PATH || '', ...pathAdditions].filter(Boolean).join(path.delimiter),
       PYTHONUNBUFFERED: '1',
       PYTHONIOENCODING: 'utf-8',
       PYTHONUTF8: '1'

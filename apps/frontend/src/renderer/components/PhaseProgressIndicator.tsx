@@ -102,8 +102,7 @@ export const PhaseProgressIndicator = memo(function PhaseProgressIndicator({
 
   // Determine if we should show indeterminate (activity) vs determinate (%) progress
   const isIndeterminatePhase = phase === 'planning' || phase === 'qa_review' || phase === 'qa_fixing';
-  // Show subtask progress whenever subtasks exist (stops pulsing animation when spec completes)
-  const showSubtaskProgress = totalSubtasks > 0;
+  const showSubtaskProgress = phase === 'coding' || (totalSubtasks > 0 && !isIndeterminatePhase);
 
   const colors = PHASE_COLORS[phase] || PHASE_COLORS.idle;
   const phaseLabel = t(PHASE_LABEL_KEYS[phase] || PHASE_LABEL_KEYS.idle);

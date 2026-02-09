@@ -1,1 +1,227 @@
-API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"},"request_id":"req_011CXJqvMJd22WbajLGMGsfw"} · Please run /login
+# Auto Claude CLI Usage
+
+This document covers terminal-only usage of Auto Claude. **For most users, we recommend using the [Desktop UI](#) instead** - it provides a better experience with visual task management, progress tracking, and automatic Python environment setup.
+
+## When to Use CLI
+
+- You prefer terminal workflows
+- You're running on a headless server
+- You're integrating Auto Claude into scripts or CI/CD
+
+## Prerequisites
+
+- Python 3.9+
+- Choose an engine runtime:
+  - **Claude (default)**: Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) + Claude subscription
+  - **Codex**: Codex CLI (`brew install --cask codex` or `npm install -g @openai/codex`) + ChatGPT login (`codex login`)
+
+### Installing Python
+
+**Windows:**
+```bash
+winget install Python.Python.3.12
+```
+
+**macOS:**
+```bash
+brew install python@3.12
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt install python3.12 python3.12-venv
+```
+
+**Linux (Fedora):**
+```bash
+sudo dnf install python3.12
+```
+
+## Setup
+
+**Step 1:** Navigate to the backend directory
+
+```bash
+cd apps/backend
+```
+
+**Step 2:** Set up Python environment
+
+```bash
+# Using uv (recommended)
+uv venv && uv pip install -r requirements.txt
+
+# Or using standard Python
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+```
+
+**Step 3:** Configure environment
+
+```bash
+cp .env.example .env
+```
+
+### Claude engine (default)
+
+```bash
+# Get your OAuth token
+claude setup-token
+
+# Add the token to apps/backend/.env
+# CLAUDE_CODE_OAUTH_TOKEN=your-token-here
+```
+
+### Codex engine
+
+```bash
+# Authenticate with ChatGPT (no API key required)
+codex login
+
+# Select Codex at runtime
+python run.py --engine codex --list
+```
+
+### Codex execpolicy (optional)
+
+Codex can use execpolicy rules to auto-allow common commands and prompt before risky ones.
+Auto-Claude can generate a rules file from your project's security profile:
+
+```bash
+# Writes to ~/.codex/rules/auto-claude.rules by default
+python run.py --install-codex-execpolicy
+
+# Or choose a custom output path
+python run.py --install-codex-execpolicy --codex-execpolicy-path /path/to/auto-claude.rules
+
+# Optionally install and run a spec in the same invocation
+python run.py --engine codex --install-codex-execpolicy --spec 001
+```
+
+## Creating Specs
+
+All commands below should be run from the `apps/backend/` directory:
+
+```bash
+# Activate the virtual environment (if not already active)
+source .venv/bin/activate
+
+# Create a spec interactively
+python spec_runner.py --interactive
+
+# Or with a task description
+python spec_runner.py --task "Add user authentication with OAuth"
+
+# Force a specific complexity level
+python spec_runner.py --task "Fix button color" --complexity simple
+
+# Continue an interrupted spec
+python spec_runner.py --continue 001-feature
+```
+
+### Complexity Tiers
+
+The spec runner automatically assesses task complexity:
+
+| Tier | Phases | When Used |
+|------|--------|-----------|
+| **SIMPLE** | 3 | 1-2 files, single service, no integrations (UI fixes, text changes) |
+| **STANDARD** | 6 | 3-10 files, 1-2 services, minimal integrations (features, bug fixes) |
+| **COMPLEX** | 8 | 10+ files, multiple services, external integrations |
+
+## Running Builds
+
+```bash
+# List all specs and their status
+python run.py --list
+
+# Run a specific spec
+python run.py --spec 001
+python run.py --spec 001-feature-name
+
+# Limit iterations for testing
+python run.py --spec 001 --max-iterations 5
+
+# Use Codex CLI engine (requires `codex login`)
+python run.py --engine codex --spec 001
+```
+
+## QA Validation
+
+After all chunks are complete, QA validation runs automatically:
+
+```bash
+# Skip automatic QA
+python run.py --spec 001 --skip-qa
+
+# Run QA validation manually
+python run.py --spec 001 --qa
+
+# Check QA status
+python run.py --spec 001 --qa-status
+```
+
+The QA validation loop:
+1. **QA Reviewer** checks all acceptance criteria
+2. If issues found → creates `QA_FIX_REQUEST.md`
+3. **QA Fixer** applies fixes
+4. Loop repeats until approved (up to 50 iterations)
+
+## Workspace Management
+
+Auto Claude uses Git worktrees for isolated builds:
+
+```bash
+# Test the feature in the isolated workspace
+cd .worktrees/auto-claude/
+npm run dev  # or your project's run command
+
+# Return to backend directory to run management commands
+cd apps/backend
+
+# See what was changed
+python run.py --spec 001 --review
+
+# Merge changes into your project
+python run.py --spec 001 --merge
+
+# Discard if you don't like it
+python run.py --spec 001 --discard
+```
+
+## Interactive Controls
+
+While the agent is running:
+
+```bash
+# Pause and add instructions
+Ctrl+C (once)
+
+# Exit immediately
+Ctrl+C (twice)
+```
+
+**File-based alternative:**
+```bash
+# Create PAUSE file to pause after current session
+touch specs/001-name/PAUSE
+
+# Add instructions
+echo "Focus on fixing the login bug first" > specs/001-name/HUMAN_INPUT.md
+```
+
+## Spec Validation
+
+```bash
+python validate_spec.py --spec-dir specs/001-feature --checkpoint all
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTO_CLAUDE_ENGINE` | No | Select engine runtime (`claude` or `codex`) |
+| `AUTO_CLAUDE_CODEX_APPROVAL_POLICY` | No | Codex CLI approvals (`untrusted`, `on-failure`, `on-request`, `never`); default is TTY-aware (Codex only) |
+| `AUTO_CLAUDE_CODEX_SANDBOX_MODE` | No | Codex CLI sandbox (`read-only`, `workspace-write`, `danger-full-access`) (Codex only) |
+| `AUTO_CLAUDE_CODEX_PATH` | No | Full path to the `codex` binary when it isn't discoverable via PATH (Codex only) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude only | OAuth token from `claude setup-token` |
+| `AUTO_BUILD_MODEL` | No | Model override (default: claude-opus-4-5-20251101) |

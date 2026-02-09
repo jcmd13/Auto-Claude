@@ -8,6 +8,7 @@
  * - Changelog operations
  * - Linear integration
  * - GitHub integration
+ * - Auto-build source updates
  * - Shell operations
  */
 
@@ -18,6 +19,7 @@ import { createChangelogAPI, ChangelogAPI } from './modules/changelog-api';
 import { createLinearAPI, LinearAPI } from './modules/linear-api';
 import { createGitHubAPI, GitHubAPI } from './modules/github-api';
 import { createGitLabAPI, GitLabAPI } from './modules/gitlab-api';
+import { createAutoBuildAPI, AutoBuildAPI } from './modules/autobuild-api';
 import { createShellAPI, ShellAPI } from './modules/shell-api';
 
 /**
@@ -32,6 +34,7 @@ export interface AgentAPI extends
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
+  AutoBuildAPI,
   ShellAPI {}
 
 /**
@@ -47,6 +50,7 @@ export const createAgentAPI = (): AgentAPI => {
   const linearAPI = createLinearAPI();
   const githubAPI = createGitHubAPI();
   const gitlabAPI = createGitLabAPI();
+  const autobuildAPI = createAutoBuildAPI();
   const shellAPI = createShellAPI();
 
   return {
@@ -71,6 +75,9 @@ export const createAgentAPI = (): AgentAPI => {
     // GitLab Integration API
     ...gitlabAPI,
 
+    // Auto-Build Source Update API
+    ...autobuildAPI,
+
     // Shell Operations API
     ...shellAPI
   };
@@ -85,5 +92,6 @@ export type {
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
+  AutoBuildAPI,
   ShellAPI
 };

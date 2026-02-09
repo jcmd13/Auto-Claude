@@ -30,8 +30,5 @@ export * from './themes';
 // GitHub integration constants
 export * from './github';
 
-// API profile presets
-export * from './api-profiles';
-
 // Configuration and paths
 export * from './config';

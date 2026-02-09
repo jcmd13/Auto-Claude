@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -16,6 +15,9 @@ interface ProjectTabBarProps {
   className?: string;
   // Control props for active tab
   onSettingsClick?: () => void;
+  showArchived?: boolean;
+  archivedCount?: number;
+  onToggleArchived?: () => void;
 }
 
 export function ProjectTabBar({
@@ -25,10 +27,11 @@ export function ProjectTabBar({
   onProjectClose,
   onAddProject,
   className,
-  onSettingsClick
+  onSettingsClick,
+  showArchived,
+  archivedCount,
+  onToggleArchived
 }: ProjectTabBarProps) {
-  const { t } = useTranslation('common');
-
   // Keyboard shortcuts for tab navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -106,6 +109,9 @@ export function ProjectTabBar({
               }}
               // Pass control props only for active tab
               onSettingsClick={isActiveTab ? onSettingsClick : undefined}
+              showArchived={isActiveTab ? showArchived : undefined}
+              archivedCount={isActiveTab ? archivedCount : undefined}
+              onToggleArchived={isActiveTab ? onToggleArchived : undefined}
             />
           );
         })}
@@ -118,7 +124,7 @@ export function ProjectTabBar({
           size="icon"
           className="h-8 w-8"
           onClick={onAddProject}
-          aria-label={t('projectTab.addProjectAriaLabel')}
+          title="Add Project"
         >
           <Plus className="h-4 w-4" />
         </Button>

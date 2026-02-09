@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # =============================================================================
 # Common Finding Types
@@ -46,10 +46,6 @@ class BaseFinding(BaseModel):
     line: int = Field(0, description="Line number of the issue")
     suggested_fix: str | None = Field(None, description="How to fix this issue")
     fixable: bool = Field(False, description="Whether this can be auto-fixed")
-    evidence: str | None = Field(
-        None,
-        description="Actual code snippet proving the issue exists. Required for validation.",
-    )
 
 
 class SecurityFinding(BaseFinding):
@@ -82,6 +78,9 @@ class DeepAnalysisFinding(BaseFinding):
         "performance",
         "logic",
     ] = Field(description="Issue category")
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="AI's confidence in this finding (0.0-1.0)"
+    )
     verification_note: str | None = Field(
         None, description="What evidence is missing or couldn't be verified"
     )
@@ -316,10 +315,20 @@ class OrchestratorFinding(BaseModel):
         description="Issue severity level"
     )
     suggestion: str | None = Field(None, description="How to fix this issue")
-    evidence: str | None = Field(
-        None,
-        description="Actual code snippet proving the issue exists. Required for validation.",
+    confidence: float = Field(
+        0.85,
+        ge=0.0,
+        le=1.0,
+        description="Confidence (0.0-1.0 or 0-100, normalized to 0.0-1.0)",
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range (accepts 0-100 or 0.0-1.0)."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class OrchestratorReviewResponse(BaseModel):
@@ -346,6 +355,9 @@ class LogicFinding(BaseFinding):
     category: Literal["logic"] = Field(
         default="logic", description="Always 'logic' for logic findings"
     )
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="Confidence in this finding (0.0-1.0)"
+    )
     example_input: str | None = Field(
         None, description="Concrete input that triggers the bug"
     )
@@ -354,6 +366,14 @@ class LogicFinding(BaseFinding):
         None, description="What the code should produce"
     )
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
+
 
 class CodebaseFitFinding(BaseFinding):
     """A codebase fit finding from the codebase fit review agent."""
@@ -361,12 +381,23 @@ class CodebaseFitFinding(BaseFinding):
     category: Literal["codebase_fit"] = Field(
         default="codebase_fit", description="Always 'codebase_fit' for fit findings"
     )
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="Confidence in this finding (0.0-1.0)"
+    )
     existing_code: str | None = Field(
         None, description="Reference to existing code that should be used instead"
     )
     codebase_pattern: str | None = Field(
         None, description="Description of the established pattern being violated"
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class ParallelOrchestratorFinding(BaseModel):
@@ -392,9 +423,8 @@ class ParallelOrchestratorFinding(BaseModel):
     severity: Literal["critical", "high", "medium", "low"] = Field(
         description="Issue severity level"
     )
-    evidence: str | None = Field(
-        None,
-        description="Actual code snippet proving the issue exists. Required for validation.",
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="Confidence in this finding (0.0-1.0)"
     )
     suggested_fix: str | None = Field(None, description="How to fix this issue")
     fixable: bool = Field(False, description="Whether this can be auto-fixed")
@@ -405,6 +435,14 @@ class ParallelOrchestratorFinding(BaseModel):
     cross_validated: bool = Field(
         False, description="Whether multiple agents agreed on this finding"
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class AgentAgreement(BaseModel):
@@ -458,13 +496,21 @@ class ResolutionVerification(BaseModel):
     status: Literal["resolved", "partially_resolved", "unresolved", "cant_verify"] = (
         Field(description="Resolution status after AI verification")
     )
-    evidence: str = Field(
-        min_length=1,
-        description="Actual code snippet showing the resolution status. Required.",
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="Confidence in the resolution status"
     )
+    evidence: str = Field(description="What evidence supports this resolution status")
     resolution_notes: str | None = Field(
         None, description="Detailed notes on how the issue was addressed"
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class ParallelFollowupFinding(BaseModel):
@@ -488,9 +534,8 @@ class ParallelFollowupFinding(BaseModel):
     severity: Literal["critical", "high", "medium", "low"] = Field(
         description="Issue severity level"
     )
-    evidence: str | None = Field(
-        None,
-        description="Actual code snippet proving the issue exists. Required for validation.",
+    confidence: float = Field(
+        0.85, ge=0.0, le=1.0, description="Confidence in this finding (0.0-1.0)"
     )
     suggested_fix: str | None = Field(None, description="How to fix this issue")
     fixable: bool = Field(False, description="Whether this can be auto-fixed")
@@ -500,6 +545,14 @@ class ParallelFollowupFinding(BaseModel):
     related_to_previous: str | None = Field(
         None, description="ID of related previous finding if this is a regression"
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class CommentAnalysis(BaseModel):
@@ -587,9 +640,6 @@ class FindingValidationResult(BaseModel):
 
     The finding-validator agent uses this to report whether a previous finding
     is a genuine issue or a false positive that should be dismissed.
-
-    EVIDENCE-BASED VALIDATION: No confidence scores - validation is binary.
-    Either the evidence shows the issue exists, or it doesn't.
     """
 
     finding_id: str = Field(description="ID of the finding being validated")
@@ -598,17 +648,16 @@ class FindingValidationResult(BaseModel):
     ] = Field(
         description=(
             "Validation result: "
-            "confirmed_valid = code evidence proves issue IS real; "
-            "dismissed_false_positive = code evidence proves issue does NOT exist; "
-            "needs_human_review = cannot find definitive evidence either way"
+            "confirmed_valid = issue IS real, keep as unresolved; "
+            "dismissed_false_positive = original finding was incorrect, remove; "
+            "needs_human_review = cannot determine with confidence"
         )
     )
     code_evidence: str = Field(
         min_length=1,
         description=(
             "REQUIRED: Exact code snippet examined from the file. "
-            "Must be actual code copy-pasted from the file, not a description. "
-            "This is the proof that determines the validation status."
+            "Must be actual code, not a description."
         ),
     )
     line_range: tuple[int, int] = Field(
@@ -617,17 +666,26 @@ class FindingValidationResult(BaseModel):
     explanation: str = Field(
         min_length=20,
         description=(
-            "Detailed explanation connecting the code_evidence to the validation_status. "
-            "Must explain: (1) what the original finding claimed, (2) what the actual code shows, "
-            "(3) why this proves/disproves the issue."
+            "Detailed explanation of why the finding is valid/invalid. "
+            "Must reference specific code and explain the reasoning."
         ),
     )
-    evidence_verified_in_file: bool = Field(
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
         description=(
-            "True if the code_evidence was verified to exist at the specified line_range. "
-            "False if the code couldn't be found (indicates hallucination in original finding)."
-        )
+            "Confidence in the validation result (0.0-1.0). "
+            "Must be >= 0.80 to dismiss as false positive, >= 0.70 to confirm valid."
+        ),
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: int | float) -> float:
+        """Normalize confidence to 0.0-1.0 range (accepts 0-100 or 0.0-1.0)."""
+        if v > 1:
+            return v / 100.0
+        return float(v)
 
 
 class FindingValidationResponse(BaseModel):

@@ -8,7 +8,6 @@ from typing import Any
 
 try:
     from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
-    from phase_config import resolve_model_id
 
     CLAUDE_SDK_AVAILABLE = True
 except ImportError:
@@ -18,7 +17,7 @@ except ImportError:
 class ClaudeAnalysisClient:
     """Wrapper for Claude SDK client with analysis-specific configuration."""
 
-    DEFAULT_MODEL = "sonnet"  # Shorthand - resolved via API Profile if configured
+    DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
     ALLOWED_TOOLS = ["Read", "Glob", "Grep"]
     MAX_TURNS = 50
 
@@ -111,7 +110,7 @@ class ClaudeAnalysisClient:
 
         return ClaudeSDKClient(
             options=ClaudeAgentOptions(
-                model=resolve_model_id(self.DEFAULT_MODEL),  # Resolve via API Profile
+                model=self.DEFAULT_MODEL,
                 system_prompt=system_prompt,
                 allowed_tools=self.ALLOWED_TOOLS,
                 max_turns=self.MAX_TURNS,

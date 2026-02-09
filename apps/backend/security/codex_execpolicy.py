@@ -59,13 +59,6 @@ _ALWAYS_PROMPT_COMMANDS: set[str] = {
     "sudo",
 }
 
-# Commands that should be auto-allowed even if not detected in the project profile.
-# Keep this list narrow and focused on explicit user-approved tooling.
-_EXTRA_ALLOWED_COMMANDS: set[str] = {
-    "docker",
-    "docker.exe",
-}
-
 
 # Command prefixes that should prompt even when the base command is allowed.
 # Note: execpolicy "prompt" wins over "allow" when multiple rules match.
@@ -114,7 +107,7 @@ def generate_rules_text(
     """
 
     cfg = config or CodexExecpolicyConfig()
-    allowed_commands = set(profile.get_all_allowed_commands()) | _EXTRA_ALLOWED_COMMANDS
+    allowed_commands = set(profile.get_all_allowed_commands())
 
     allow_commands = sorted(
         cmd

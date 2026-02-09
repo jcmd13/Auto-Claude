@@ -28,7 +28,6 @@ import {
   parseJSONFromOutput,
 } from './utils/subprocess-runner';
 import { AgentManager } from '../../agent/agent-manager';
-import { getRunnerEnv } from './utils/runner-env';
 
 // Debug logging
 const { debug: debugLog } = createContextLogger('GitHub AutoFix');
@@ -278,13 +277,11 @@ async function checkNewIssues(project: Project): Promise<Array<{number: number}>
 
   const backendPath = validation.backendPath!;
   const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'check-new');
-  const subprocessEnv = await getRunnerEnv();
 
   const { promise } = runPythonSubprocess<Array<{number: number}>>({
     pythonPath: getPythonPath(backendPath),
     args,
     cwd: backendPath,
-    env: subprocessEnv,
     onComplete: (stdout) => {
       return parseJSONFromOutput<Array<{number: number}>>(stdout);
     },
@@ -364,15 +361,7 @@ async function startAutoFix(
 
   // Create spec
   const taskDescription = buildInvestigationTask(issue.number, issue.title, issueContext);
-  const specData = await createSpecForIssue(
-    project,
-    issue.number,
-    issue.title,
-    taskDescription,
-    issue.html_url,
-    labels,
-    project.settings?.mainBranch  // Pass project's configured main branch
-  );
+  const specData = await createSpecForIssue(project, issue.number, issue.title, taskDescription, issue.html_url, labels);
 
   // Save auto-fix state
   const issuesDir = path.join(getGitHubDir(project), 'issues');
@@ -618,7 +607,6 @@ export function registerAutoFixHandlers(
           const backendPath = validation.backendPath!;
           const additionalArgs = issueNumbers && issueNumbers.length > 0 ? issueNumbers.map(n => n.toString()) : [];
           const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'batch-issues', additionalArgs);
-          const subprocessEnv = await getRunnerEnv();
 
           debugLog('Spawning batch process', { args });
 
@@ -626,7 +614,6 @@ export function registerAutoFixHandlers(
             pythonPath: getPythonPath(backendPath),
             args,
             cwd: backendPath,
-            env: subprocessEnv,
             onProgress: (percent, message) => {
               sendProgress({
                 phase: 'batching',
@@ -741,14 +728,12 @@ export function registerAutoFixHandlers(
           }
 
           const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'analyze-preview', additionalArgs);
-          const subprocessEnv = await getRunnerEnv();
           debugLog('Spawning analyze-preview process', { args });
 
           const { promise } = runPythonSubprocess<AnalyzePreviewResult>({
             pythonPath: getPythonPath(backendPath),
             args,
             cwd: backendPath,
-            env: subprocessEnv,
             onProgress: (percent, message) => {
               sendProgress({ phase: 'analyzing', progress: percent, message });
             },

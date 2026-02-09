@@ -11,7 +11,6 @@
     "title": "Projets récents",
     "empty": "Aucun projet",
     "emptyDescription": "Créez un nouveau projet ou ouvrez-en un existant pour commencer",
-    "openFolder": "Ouvrir le dossier",
-    "openProjectAriaLabel": "Ouvrir le projet {{name}}"
+    "openFolder": "Ouvrir le dossier"
   }
 }
