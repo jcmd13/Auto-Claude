@@ -84,7 +84,7 @@
     "lucide-react": "^0.562.0",
     "motion": "^12.23.26",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react-dom": "^19.2.6",
     "react-i18next": "^16.5.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.2.0",
